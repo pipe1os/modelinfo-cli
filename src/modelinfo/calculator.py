@@ -62,11 +62,15 @@ def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_
     
     primary_dtype = max(dtype_counts.items(), key=lambda x: x[1])[0] if dtype_counts else "Unknown"
     
+    CUDA_CONTEXT_MB = 600
+    overhead_bytes = CUDA_CONTEXT_MB * 1024 * 1024
+    
     return {
         "total_params": total_params,
         "base_memory_bytes": base_memory_bytes,
         "kv_cache_bytes": kv_cache_bytes,
-        "total_memory_bytes": base_memory_bytes + kv_cache_bytes,
+        "overhead_bytes": overhead_bytes,
+        "total_memory_bytes": base_memory_bytes + kv_cache_bytes + overhead_bytes,
         "num_layers": num_layers,
         "kv_dim": kv_dim,
         "primary_dtype": primary_dtype,

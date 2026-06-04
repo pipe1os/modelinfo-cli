@@ -99,3 +99,14 @@ def test_kv_cache_is_fp16():
     
     assert footprint["kv_cache_bytes"] == 33554432
     assert footprint["primary_dtype"] == "Q4"
+
+def test_framework_overhead_included():
+    """Verify that CUDA context and activation overhead is correctly included."""
+    tensors = {
+        "model.layers.0.attn.weight": {"shape": [1024, 1024], "dtype": "F16"}
+    }
+    footprint = calculate_footprint(tensors)
+    
+    assert "overhead_bytes" in footprint
+    assert footprint["overhead_bytes"] == 600 * 1024 * 1024
+    assert footprint["total_memory_bytes"] == footprint["base_memory_bytes"] + footprint["kv_cache_bytes"] + footprint["overhead_bytes"]

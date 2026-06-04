@@ -85,8 +85,12 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
         
     return num_layers, kv_dim, is_estimate
 
-def identify_architecture_name(tensors: Dict[str, Any], num_layers: int) -> str:
-    """Attempt to identify the architecture family based on tensor names or metadata."""
+def identify_architecture_name(tensors: Dict[str, Any], num_layers: int, config: Dict[str, Any] = None) -> str:
+    """Attempt to identify the architecture family based on tensor names, metadata, or config.json."""
+    if config and "architectures" in config and config["architectures"]:
+        arch_title = config["architectures"][0]
+        return f"{arch_title} ({num_layers} layers)" if num_layers else arch_title
+        
     metadata = tensors.get("__metadata__", {})
     gen_arch = metadata.get("general.architecture")
     

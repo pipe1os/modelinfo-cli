@@ -64,15 +64,18 @@ def print_model_info(
         vram_bytes = footprint["total_memory_bytes"]
         vram_color = "green" if vram_bytes < 8 * 1024**3 else "yellow" if vram_bytes < 16 * 1024**3 else "red"
         
-        vram_text = f"~{format_bytes(vram_bytes)}"
-        if context_length > 0:
-            if footprint.get("kv_is_estimate"):
-                vram_text += f" ({footprint['primary_dtype']}, Estimated KV Cache - Missing Config)"
-            else:
-                vram_text += f" ({footprint['primary_dtype']}, KV cache for {context_length} tokens)"
-        else:
-            vram_text += f" ({footprint['primary_dtype']}, no KV cache)"
-        vram_display = f"[{vram_color}]{vram_text}[/{vram_color}]"
+        vram_text = f"~{format_bytes(vram_bytes)} Total Minimum Required"
+        vram_display = f"[{vram_color}]{vram_text}[/{vram_color}]\n"
+        
+        weights_bytes = footprint["base_memory_bytes"]
+        vram_display += f"  ├─ Weights:    {format_bytes(weights_bytes)}\n"
+        
+        kv_cache_bytes = footprint["kv_cache_bytes"]
+        kv_note = f" (Estimated KV Cache - Missing Config)" if footprint.get("kv_is_estimate") else f" ({context_length} tokens)" if context_length > 0 else " (no KV cache)"
+        vram_display += f"  ├─ KV Cache:   {format_bytes(kv_cache_bytes)}{kv_note}\n"
+        
+        overhead_bytes = footprint.get("overhead_bytes", 600 * 1024 * 1024)
+        vram_display += f"  └─ Overhead:   {format_bytes(overhead_bytes)} (CUDA Context + Activations)"
 
     summary.add_row("Format:", format_name)
     summary.add_row("Architecture:", arch_name)

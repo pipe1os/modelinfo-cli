@@ -40,7 +40,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     tensors = {}
     config = None
     
-    if file_path.endswith(".safetensors") or file_path.endswith(".index.json"):
+    if not os.path.exists(file_path) and not file_path.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
+        from modelinfo.parsers.huggingface import fetch_huggingface_repo
+        try:
+            tensors, config, format_name, disk_size = fetch_huggingface_repo(args.file)
+        except Exception as e:
+            console.print(f"[red]Error fetching from Hugging Face: {e}[/red]")
+            return 1
+    elif file_path.endswith(".safetensors") or file_path.endswith(".index.json"):
         tensors = parse_safetensors_header(args.file)
         format_name = "SafeTensors"
         
@@ -61,13 +68,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         format_name = "PyTorch"
     else:
         console.print(
-            f"[red]Error: Unsupported file format '{args.file}'. Supported formats are .safetensors, .gguf, .pt[/red]"
+            f"[red]Error: File '{args.file}' not found locally and does not appear to be a Hugging Face repository ID.[/red]"
         )
         return 1
         
     footprint = calculate_footprint(tensors, context_length=args.context, config=config)
     num_layers = footprint["num_layers"]
-    arch_name = identify_architecture_name(tensors, num_layers)
+    arch_name = identify_architecture_name(tensors, num_layers, config)
     
     max_context = None
     if config:
@@ -78,7 +85,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         if gen_arch:
             max_context = metadata.get(f"{gen_arch}.context_length")
 
-    disk_size = os.path.getsize(args.file) if os.path.exists(args.file) else 0.0
+    if format_name != "SafeTensors" or os.path.exists(args.file):
+        disk_size = os.path.getsize(args.file) if os.path.exists(args.file) else 0.0
+        
     tensor_count = len([k for k in tensors.keys() if k != "__metadata__"])
     
     print_model_info(
