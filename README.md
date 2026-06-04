@@ -10,9 +10,9 @@ It reads binary headers directly using the Python standard library. By bypassing
 
 ## Features
 
-- **Zero-Dependency Parsing**: Reads the 8-byte JSON prefix of `.safetensors` files and the binary key-value metadata of `.gguf` directly via `struct` and `json`.
+- **Zero-Dependency Parsing**: Reads the 8-byte JSON prefix of `.safetensors` files and the binary key-value metadata of `.gguf` directly via `struct` and `json`. Seamlessly reads adjacent `config.json` for robust fallback logic.
 - **Sharded Model Support**: Transparently parses `model.safetensors.index.json` to detect multi-file checkpoint distributions, gracefully guarding against partial downloads without crashing.
-- **Dynamic VRAM Estimation**: Extracts underlying model architecture (layers, heads, dimensions) to calculate exact VRAM limits, including dynamic KV cache footprints based on user-specified context lengths.
+- **Dynamic VRAM Estimation**: Extracts underlying model architecture (layers, heads, dimensions) to calculate exact VRAM limits, including dynamic KV cache footprints based on user-specified context lengths. Actively warns users if requested context exceeds the model's native limit.
 - **Precise Block Quantization**: Factors in exact byte-scaling coefficients for GGUF formats (e.g., Q8, Q6, Q4) rather than naive averages, eliminating VRAM under-reporting.
 - **Secure Pickling**: Inspects legacy `.pt` files without executing arbitrary code by using a highly restricted `pickle.Unpickler`.
 - **Terminal UI**: Groups repetitive structural layers and color-codes VRAM heatmaps using `rich`.

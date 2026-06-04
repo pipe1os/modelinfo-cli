@@ -43,7 +43,8 @@ def print_model_info(
     footprint: Dict[str, Any],
     disk_size: float,
     context_length: int,
-    tensors: Dict[str, Any]
+    tensors: Dict[str, Any],
+    max_context: int | None = None
 ) -> None:
     summary = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
     summary.add_column("Property", style="bold")
@@ -65,7 +66,10 @@ def print_model_info(
         
         vram_text = f"~{format_bytes(vram_bytes)}"
         if context_length > 0:
-            vram_text += f" ({footprint['primary_dtype']}, KV cache for {context_length} tokens)"
+            if footprint.get("kv_is_estimate"):
+                vram_text += f" ({footprint['primary_dtype']}, Estimated KV Cache - Missing Config)"
+            else:
+                vram_text += f" ({footprint['primary_dtype']}, KV cache for {context_length} tokens)"
         else:
             vram_text += f" ({footprint['primary_dtype']}, no KV cache)"
         vram_display = f"[{vram_color}]{vram_text}[/{vram_color}]"
@@ -81,8 +85,11 @@ def print_model_info(
     console.print(summary)
 
     if missing_shards > 0:
-        console.print(f"[bold yellow]⚠️ Partial Model: Missing {missing_shards} of {total_shards} shards on disk. Totals are incomplete.[/bold yellow]")
+        console.print(f"[bold yellow]WARNING: Partial Model. Missing {missing_shards} of {total_shards} shards on disk. Totals are incomplete.[/bold yellow]")
         
+    if context_length > 0 and max_context is not None and context_length > max_context:
+        console.print(f"[bold yellow]WARNING: Requested context ({context_length:,}) exceeds model's native limit ({max_context:,}).[/bold yellow]")
+
     console.print()
     
     console.print("Top Tensors by Size:", style="bold")
@@ -90,7 +97,7 @@ def print_model_info(
     grouped_tensors = group_tensors_by_size(tensors)
     
     tensor_table = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
-    tensor_table.add_column("Name")
+    tensor_table.add_column("Name", no_wrap=True, overflow="fold")
     tensor_table.add_column("Shape", justify="right")
     tensor_table.add_column("Dtype", justify="left")
     tensor_table.add_column("Params", justify="right")

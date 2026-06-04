@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "modelinfo-cli"
-version = "1.0.0"
+version = "1.1.0"
 description = "A sub-100ms, zero-dependency CLI tool to inspect ML model checkpoints and dynamically calculate VRAM requirements."
 readme = "README.md"
 requires-python = ">=3.10"

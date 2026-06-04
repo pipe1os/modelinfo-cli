@@ -30,3 +30,18 @@ def test_missing_shard_handling():
     # it fails safely when a file truly doesn't exist.
     with pytest.raises(FileNotFoundError):
         parse_safetensors_header(os.path.join(FIXTURES_DIR, "does_not_exist.safetensors"))
+
+def test_gguf_parser_metadata():
+    """Verify that the GGUF parser extracts the global metadata bypass."""
+    from modelinfo.parsers.gguf import parse_gguf_header
+    from modelinfo.architecture import identify_architecture_name
+    
+    mock_path = os.path.join(FIXTURES_DIR, "mock_model.gguf")
+    tensors = parse_gguf_header(mock_path)
+    
+    assert "__metadata__" in tensors
+    assert tensors["__metadata__"]["general.architecture"] == "qwen2"
+    
+    # Verify the architecture bypass parses it to titlecase and prevents "Unknown Architecture"
+    arch_name = identify_architecture_name(tensors, num_layers=1)
+    assert arch_name == "Qwen2 (1 transformer layers)"

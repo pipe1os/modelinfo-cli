@@ -1,4 +1,5 @@
 import argparse
+import json
 import os
 import sys
 from typing import Sequence
@@ -37,10 +38,21 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     file_path = args.file.lower()
     tensors = {}
+    config = None
     
     if file_path.endswith(".safetensors") or file_path.endswith(".index.json"):
         tensors = parse_safetensors_header(args.file)
         format_name = "SafeTensors"
+        
+        # Read config.json to maintain pure math engines
+        config_path = os.path.join(os.path.dirname(args.file), "config.json")
+        if os.path.exists(config_path):
+            try:
+                with open(config_path, "r", encoding="utf-8") as f:
+                    config = json.load(f)
+            except (json.JSONDecodeError, OSError):
+                pass
+                
     elif file_path.endswith(".gguf"):
         tensors = parse_gguf_header(args.file)
         format_name = "GGUF"
@@ -53,10 +65,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
         
-    footprint = calculate_footprint(tensors, context_length=args.context)
+    footprint = calculate_footprint(tensors, context_length=args.context, config=config)
     num_layers = footprint["num_layers"]
     arch_name = identify_architecture_name(tensors, num_layers)
     
+    max_context = None
+    if config:
+        max_context = config.get("max_position_embeddings")
+    else:
+        metadata = tensors.get("__metadata__", {})
+        gen_arch = metadata.get("general.architecture")
+        if gen_arch:
+            max_context = metadata.get(f"{gen_arch}.context_length")
+
     disk_size = os.path.getsize(args.file) if os.path.exists(args.file) else 0.0
     tensor_count = len([k for k in tensors.keys() if k != "__metadata__"])
     
@@ -67,7 +88,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         footprint=footprint,
         disk_size=disk_size,
         context_length=args.context,
-        tensors=tensors
+        tensors=tensors,
+        max_context=max_context
     )
 
     return 0

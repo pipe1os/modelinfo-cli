@@ -29,7 +29,7 @@ def _get_bytes_per_param(dtype: str) -> float:
     """Return the size in bytes for a given data type."""
     return DTYPE_BYTES.get(dtype.upper(), 2.0)
 
-def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_size: int = 1) -> Dict[str, Any]:
+def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_size: int = 1, config: Dict[str, Any] = None) -> Dict[str, Any]:
     """
     Calculate the memory footprint of a model based on its tensors and context length.
     """
@@ -54,7 +54,7 @@ def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_
         bytes_per_param = _get_bytes_per_param(dtype)
         base_memory_bytes += param_count * bytes_per_param
         
-    num_layers, kv_dim = extract_architecture(tensors)
+    num_layers, kv_dim, is_estimate = extract_architecture(tensors, config)
     
     # Formula: 2 * Layers * (KV_Heads * Head_Dim) * Context_Length * Batch_Size * Bytes_per_param
     # Assume FP16 (2 bytes) for KV cache
@@ -69,7 +69,8 @@ def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_
         "total_memory_bytes": base_memory_bytes + kv_cache_bytes,
         "num_layers": num_layers,
         "kv_dim": kv_dim,
-        "primary_dtype": primary_dtype
+        "primary_dtype": primary_dtype,
+        "kv_is_estimate": is_estimate
     }
 
 def format_bytes(size_bytes: float) -> str:

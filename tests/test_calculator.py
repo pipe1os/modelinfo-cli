@@ -63,3 +63,39 @@ def test_dynamic_kv_cache():
     assert footprint["num_layers"] == 2
     assert footprint["kv_dim"] == 1024
     assert footprint["kv_cache_bytes"] == 8192000
+
+def test_safetensors_config_fallback():
+    """Verify that architecture extraction correctly parses a config dictionary for SafeTensors."""
+    from modelinfo.architecture import extract_architecture
+    
+    tensors = {
+        "model.layers.0.qkv_proj.weight": {
+            "shape": [6144, 4096],
+            "dtype": "F16"
+        }
+    }
+    
+    config = {
+        "num_hidden_layers": 32,
+        "num_attention_heads": 32,
+        "num_key_value_heads": 8,
+        "hidden_size": 4096
+    }
+    
+    num_layers, kv_dim, is_estimate = extract_architecture(tensors, config=config)
+    
+    assert num_layers == 32
+    assert kv_dim == 1024
+    assert is_estimate is False
+
+def test_kv_cache_is_fp16():
+    """Verify that KV cache is always calculated using 2.0 bytes (FP16), even for Q4 base models."""
+    tensors = {
+        "model.layers.0.attn.weight": {"shape": [4096, 4096], "dtype": "Q4"},
+        "model.layers.0.attn.k.weight": {"shape": [1024, 4096], "dtype": "Q4"},
+    }
+    
+    footprint = calculate_footprint(tensors, context_length=8192)
+    
+    assert footprint["kv_cache_bytes"] == 33554432
+    assert footprint["primary_dtype"] == "Q4"
