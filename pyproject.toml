@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modelinfo-cli"
+version = "0.1.0"
+description = "A sub-100ms, zero-dependency CLI tool to inspect ML model checkpoints and dynamically calculate VRAM requirements."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "ModelInfo Contributors" }
+]
+dependencies = [
+    "rich>=13.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build",
+    "twine",
+    "pytest",
+    "pytest-cov",
+    "ruff"
+]
+
+[project.scripts]
+modelinfo = "modelinfo.cli:main"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
