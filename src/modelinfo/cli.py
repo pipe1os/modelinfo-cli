@@ -85,7 +85,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     is_default_context = False
     context_length = args.context
     if context_length is None:
-        context_length = max_context if max_context else 2048
+        context_length = min(8192, max_context) if max_context else 8192
         is_default_context = True
 
     footprint = calculate_footprint(tensors, context_length=context_length, config=config)
@@ -106,6 +106,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         context_length=context_length,
         is_default_context=is_default_context,
         tensors=tensors,
+        max_context=max_context
     )
 
     return 0

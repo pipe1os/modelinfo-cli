@@ -80,7 +80,10 @@ def print_model_info(
         if footprint.get("kv_is_estimate"):
             kv_note = " (Estimated KV Cache - Missing Config)"
         elif is_default_context:
-            kv_note = f" (Default {context_length} tokens)"
+            if max_context and max_context > context_length:
+                kv_note = f" (Default {context_length} tokens. Native limit: {max_context:,})"
+            else:
+                kv_note = f" (Default {context_length} tokens)"
         else:
             kv_note = f" ({context_length} tokens)"
             
