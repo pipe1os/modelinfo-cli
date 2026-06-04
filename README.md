@@ -11,11 +11,12 @@ It reads binary headers directly using the Python standard library. By bypassing
 ## Features
 
 - **Zero-Dependency Parsing**: Reads the 8-byte JSON prefix of `.safetensors` files and the binary key-value metadata of `.gguf` directly via `struct` and `json`. Seamlessly reads adjacent `config.json` for robust fallback logic.
+- **Remote Hugging Face Hub Inspection**: Inspect any public or gated model directly via its repo ID (e.g., `modelinfo meta-llama/Llama-2-7b-hf`) without downloading the 15GB checkpoint. Uses concurrent byte-range requests to pluck the binary headers directly off the CDN in under 2 seconds.
 - **Sharded Model Support**: Transparently parses `model.safetensors.index.json` to detect multi-file checkpoint distributions, gracefully guarding against partial downloads without crashing.
-- **Dynamic VRAM Estimation**: Extracts underlying model architecture (layers, heads, dimensions) to calculate exact VRAM limits, including dynamic KV cache footprints based on user-specified context lengths. Actively warns users if requested context exceeds the model's native limit.
+- **Dynamic VRAM Estimation**: Extracts underlying model architecture (layers, heads, dimensions) to calculate exact VRAM limits, including dynamic KV cache footprints based on user-specified context lengths. Defaults to 8192 tokens to prevent unrealistic VRAM calculations, while still warning users if the requested context exceeds the model's native limit. Estimates include a standard 600MB CUDA context overhead.
 - **Precise Block Quantization**: Factors in exact byte-scaling coefficients for GGUF formats (e.g., Q8, Q6, Q4) rather than naive averages, eliminating VRAM under-reporting.
 - **Secure Pickling**: Inspects legacy `.pt` files without executing arbitrary code by using a highly restricted `pickle.Unpickler`.
-- **Terminal UI**: Groups repetitive structural layers and color-codes VRAM heatmaps using `rich`.
+- **Terminal UI**: Groups repetitive structural layers and color-codes VRAM heatmaps using `rich`. Breaks down memory footprints into Weights, KV Cache, and Overhead.
 
 ## Installation
 
@@ -49,10 +50,16 @@ pytest tests/ -v
 
 ## Usage
 
-Inspect a model checkpoint:
+Inspect a local model checkpoint:
 
 ```bash
 modelinfo mistral-7b.safetensors
+```
+
+Inspect a remote model directly from the Hugging Face Hub:
+
+```bash
+modelinfo meta-llama/Llama-2-7b-hf
 ```
 
 Calculate the memory footprint with a specific KV cache context window:

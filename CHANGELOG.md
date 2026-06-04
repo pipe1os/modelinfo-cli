@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
  
+## [1.2.0] - 2026-06-04
+
+This release adds remote Hugging Face Hub inspection, dynamic VRAM overhead modeling, and sensible context defaults for operational inference planning.
+
+### Added
+- **Remote Hugging Face Hub Support:** Inspect any public or gated model directly via its repo ID (e.g., `modelinfo meta-llama/Llama-2-7b-hf`) without downloading the full checkpoint. Uses concurrent `Range` requests (max 8 workers) to extract the first 500KB of safetensors shards to prevent synchronous I/O bottlenecks and bypass CDN rate-limits.
+- **Framework Overhead Modeling:** VRAM estimates now include a static 600 MB CUDA context overhead alongside the model weights and KV cache for operational accuracy.
+- **Hierarchical VRAM UI:** Redesigned the output terminal UI to group memory footprints into Weights, KV Cache, and Overhead.
+
+### Changed
+- **Sane Context Defaults:** Hard-capped the default `--context` value at 8192 tokens. Models with extreme architectural boundaries (e.g., 128k) will still read the native limit and print it in the UI, protecting users from unrealistic default memory calculations.
+- **Authentication Fallback:** Remote HTTP fetcher now supports token extraction from the `HF_TOKEN` environment variable, `~/.cache/huggingface/token`, and the legacy `~/.huggingface/token` path.
+
 ## [1.1.0] - 2026-06-04
  
 This release introduces deterministic architecture parsing and native context limit warnings, shifting the tool from heuristic guesswork to explicit binary metadata extraction.
