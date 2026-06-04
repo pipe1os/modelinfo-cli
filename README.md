@@ -62,6 +62,15 @@ Inspect a remote model directly from the Hugging Face Hub:
 modelinfo meta-llama/Llama-2-7b-hf
 ```
 
+For gated models (e.g., Llama 2), you must provide authentication by setting the `HF_TOKEN` environment variable. You can create a token in your [Hugging Face settings](https://huggingface.co/settings/tokens).
+
+```bash
+export HF_TOKEN="hf_your_token_here"
+modelinfo meta-llama/Llama-2-7b-hf
+```
+
+Alternatively, the tool will automatically read tokens stored by the `hf auth login` command (located in `~/.cache/huggingface/token`).
+
 Calculate the memory footprint with a specific KV cache context window:
 
 ```bash
