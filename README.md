@@ -19,14 +19,32 @@ It reads binary headers directly using the Python standard library. By bypassing
 
 ## Installation
 
-Clone the repository and install the package locally:
+Install directly from PyPI:
 
 ```bash
-git clone https://github.com/your-org/modelinfo-cli.git
+pip install modelinfo-cli
+```
+
+### Development
+
+To install from source and run the test suite:
+
+```bash
+git clone https://github.com/pipe1os/modelinfo-cli.git
 cd modelinfo-cli
 python -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[dev]"
+```
+
+## Testing
+
+The testing suite enforces cross-platform structural integrity and guards the zero-dependency latency constraint. Tests are isolated against custom binary mocks in `tests/fixtures/`.
+
+Run the test suite using pytest:
+
+```bash
+pytest tests/ -v
 ```
 
 ## Usage
