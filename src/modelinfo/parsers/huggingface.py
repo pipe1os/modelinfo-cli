@@ -18,6 +18,15 @@ def _get_hf_token() -> str | None:
                 return f.read().strip()
         except OSError:
             pass
+            
+    legacy_path = os.path.expanduser("~/.huggingface/token")
+    if os.path.exists(legacy_path):
+        try:
+            with open(legacy_path, "r", encoding="utf-8") as f:
+                return f.read().strip()
+        except OSError:
+            pass
+            
     return None
 
 def _make_request(url: str, headers: Dict[str, str] = None) -> bytes:
@@ -104,7 +113,7 @@ def fetch_huggingface_repo(repo_id: str) -> Tuple[Dict[str, Any], Dict[str, Any]
         def fetch_shard(shard: str):
             return shard, _fetch_safetensors_header(repo_id, shard)
             
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(16, len(unique_shards))) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(unique_shards))) as executor:
             future_to_shard = {executor.submit(fetch_shard, shard): shard for shard in unique_shards}
             for future in concurrent.futures.as_completed(future_to_shard):
                 shard, shard_header = future.result()

@@ -43,6 +43,7 @@ def print_model_info(
     footprint: Dict[str, Any],
     disk_size: float,
     context_length: int,
+    is_default_context: bool,
     tensors: Dict[str, Any],
     max_context: int | None = None
 ) -> None:
@@ -58,6 +59,10 @@ def print_model_info(
         param_text = "[yellow]UNKNOWN (Missing Shards)[/yellow]"
         disk_text = "[yellow]UNKNOWN (Missing Shards)[/yellow]"
         vram_display = "[yellow]UNKNOWN (Missing Shards)[/yellow]"
+    elif footprint["total_memory_bytes"] == 0:
+        param_text = format_params(footprint["total_params"])
+        disk_text = format_bytes(disk_size)
+        vram_display = "[red]Unknown (Missing Tensor Shapes)[/red]"
     else:
         param_text = format_params(footprint["total_params"])
         disk_text = format_bytes(disk_size)
@@ -71,7 +76,14 @@ def print_model_info(
         vram_display += f"  ├─ Weights:    {format_bytes(weights_bytes)}\n"
         
         kv_cache_bytes = footprint["kv_cache_bytes"]
-        kv_note = f" (Estimated KV Cache - Missing Config)" if footprint.get("kv_is_estimate") else f" ({context_length} tokens)" if context_length > 0 else " (no KV cache)"
+        
+        if footprint.get("kv_is_estimate"):
+            kv_note = " (Estimated KV Cache - Missing Config)"
+        elif is_default_context:
+            kv_note = f" (Default {context_length} tokens)"
+        else:
+            kv_note = f" ({context_length} tokens)"
+            
         vram_display += f"  ├─ KV Cache:   {format_bytes(kv_cache_bytes)}{kv_note}\n"
         
         overhead_bytes = footprint.get("overhead_bytes", 600 * 1024 * 1024)

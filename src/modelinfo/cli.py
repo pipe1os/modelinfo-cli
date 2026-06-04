@@ -26,7 +26,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--context",
         type=int,
-        default=0,
+        default=None,
         help="Context length for dynamic KV cache footprint calculation.",
     )
 
@@ -72,18 +72,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
         return 1
         
-    footprint = calculate_footprint(tensors, context_length=args.context, config=config)
-    num_layers = footprint["num_layers"]
-    arch_name = identify_architecture_name(tensors, num_layers, config)
-    
     max_context = None
     if config:
         max_context = config.get("max_position_embeddings")
-    else:
+    elif format_name == "GGUF":
         metadata = tensors.get("__metadata__", {})
         gen_arch = metadata.get("general.architecture")
         if gen_arch:
             max_context = metadata.get(f"{gen_arch}.context_length")
+            
+    # Determine the actual context length to use for calculation
+    is_default_context = False
+    context_length = args.context
+    if context_length is None:
+        context_length = max_context if max_context else 2048
+        is_default_context = True
+
+    footprint = calculate_footprint(tensors, context_length=context_length, config=config)
+    num_layers = footprint["num_layers"]
+    arch_name = identify_architecture_name(tensors, num_layers, config)
 
     if format_name != "SafeTensors" or os.path.exists(args.file):
         disk_size = os.path.getsize(args.file) if os.path.exists(args.file) else 0.0
@@ -96,9 +103,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         tensor_count=tensor_count,
         footprint=footprint,
         disk_size=disk_size,
-        context_length=args.context,
+        context_length=context_length,
+        is_default_context=is_default_context,
         tensors=tensors,
-        max_context=max_context
     )
 
     return 0
