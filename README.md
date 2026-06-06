@@ -10,14 +10,15 @@ It reads binary headers directly using the Python standard library. By bypassing
 
 ## Features
 
-- **Zero-Dependency Parsing**: Reads the 8-byte JSON prefix of `.safetensors` files and the binary key-value metadata of `.gguf` directly via `struct` and `json`. Seamlessly reads adjacent `config.json` for robust fallback logic.
-- **Remote Hugging Face Hub Inspection**: Inspect any public or gated model directly via its repo ID (e.g., `modelinfo meta-llama/Llama-2-7b-hf`) without downloading the 15GB checkpoint. Uses concurrent byte-range requests to pluck the binary headers directly off the CDN in under 2 seconds.
+- **Zero-Dependency Parsing**: Reads the 8-byte JSON prefix of `.safetensors` files and the binary key-value metadata of `.gguf` directly via `struct` and `json`. Reads adjacent `config.json` for architecture fallback.
+- **Remote Hugging Face Hub Inspection**: Inspect any public or gated model directly via its repo ID (e.g., `modelinfo meta-llama/Llama-2-7b-hf`) without downloading the checkpoint. Uses concurrent byte-range requests to read the binary headers directly off the CDN in under 2 seconds.
 - **Sharded Model Support**: Transparently parses `model.safetensors.index.json` to detect multi-file checkpoint distributions, gracefully guarding against partial downloads without crashing.
-- **Dynamic VRAM Estimation**: Extracts underlying model architecture (layers, heads, dimensions) to calculate exact VRAM limits, including dynamic KV cache footprints based on user-specified context lengths. Defaults to 8192 tokens to prevent unrealistic VRAM calculations, while still warning users if the requested context exceeds the model's native limit. Estimates include a standard 600MB CUDA context overhead.
-- **Side-by-Side Comparison**: Pass multiple models to automatically trigger an implicit comparison table. Compares parameters, data types, context lengths, and VRAM footprints side-by-side to easily evaluate trade-offs (e.g. quantization vs. context window).
+- **Dynamic VRAM Estimation**: Extracts underlying model architecture to calculate exact VRAM limits, including dynamic KV cache footprints based on user-specified context lengths.
+- **Hardware Fit Diagnostics**: Pass the `--gpu` flag (e.g. `--gpu RTX4090` or `--gpu auto`) to calculate if the model fits in your specific cluster. Defends against fragmentation OOMs using a 3-tier heuristic (Safe, Warning, Fail), calculates overhead across multi-GPU setups, and enforces Apple Silicon's 75% unified memory wire limit.
+- **Side-by-Side Comparison**: Pass multiple models to automatically trigger a comparison table. Compares parameters, data types, context lengths, and VRAM footprints side-by-side to evaluate trade-offs.
 - **Precise Block Quantization**: Factors in exact byte-scaling coefficients for GGUF formats (e.g., Q8, Q6, Q4) rather than naive averages, eliminating VRAM under-reporting.
 - **Secure Pickling**: Inspects legacy `.pt` files without executing arbitrary code by using a highly restricted `pickle.Unpickler`.
-- **Terminal UI**: Groups repetitive structural layers and color-codes VRAM heatmaps using `rich`. Breaks down memory footprints into Weights, KV Cache, and Overhead. VRAM color thresholds dynamically adjust based on an optional `--max-vram` hardware target.
+- **Terminal UI**: Groups repetitive structural layers and color-codes VRAM heatmaps using `rich`. Breaks down memory footprints into Weights, KV Cache, and Overhead.
 
 ## Installation
 
@@ -84,22 +85,33 @@ Adjust the VRAM heat-mapping thresholds for your specific hardware (e.g., an 80G
 modelinfo meta-llama/Llama-2-7b-hf --max-vram 80
 ```
 
-Compare multiple models side-by-side:
+Determine if a model fits your specific hardware:
 
 ```bash
-modelinfo mistralai/Mistral-7B-v0.1 Qwen/Qwen2.5-0.5B
+modelinfo mistralai/Mistral-7B-v0.1 --gpu "RTX 4090"
+modelinfo mistralai/Mistral-7B-v0.1 --gpu auto
+```
+
+Compare multiple models side-by-side against a hardware target:
+
+```bash
+modelinfo mistralai/Mistral-7B-v0.1 Qwen/Qwen2.5-0.5B --gpu 12
 ```
 
 ### Example Output (Single Model)
 
 ```text
-Format:         SafeTensors
-Architecture:   Mistral (32 transformer layers)
-Tensors:        291
-Parameters:     7.2B
-Dtype:          bf16
-Disk size:      13.49 GB
-VRAM (est):     ~15.2 GB (bf16, KV cache for 8192 tokens)
+Format:          SafeTensors
+Architecture:    MistralForCausalLM (32 layers)
+Tensors:         291
+Parameters:      7.2B
+Dtype:           BF16
+Disk size:       13.49 GB
+VRAM (est):      ~15.07 GB Total Minimum Required
+                   ├─ Weights:    13.49 GB
+                   ├─ KV Cache:   1.0 GB (Default 8192 tokens. Native limit: 32,768)
+                   └─ Overhead:   600.0 MB (CUDA Context + Activations)
+Hardware Fit:    ✗ No (Requires 15.07 GB, Hardware has 12.0 GB)
 
 Top Tensors by Size:
   model.embed_tokens.weight                     [32000 x 4096]   bf16   131.1M params
@@ -109,10 +121,20 @@ Top Tensors by Size:
 ### Example Output (Comparison)
 
 ```text
-Model                              Params    Dtype    Context    VRAM
-Mistral-7B-v0.1                    7.2B      BF16     8K         15.07 GB
-Qwen2.5-0.5B                       494.0M    BF16     8K         1.6 GB
+Model              Params    Dtype    Context    VRAM        Fits
+Mistral-7B-v0.1    7.2B      BF16     8K         15.07 GB    ✗
+Qwen2.5-0.5B       494.0M    BF16     8K         1.6 GB      ✓
 ```
+
+## Command Reference
+
+| Argument | Example | Description |
+| :--- | :--- | :--- |
+| `[files...]` | `modelinfo model.safetensors` | Inspect a single model (local path or Hugging Face repo ID). |
+| `[files...]` | `modelinfo modelA modelB` | Pass multiple files/repos to automatically render a side-by-side comparison table instead of a deep-dive summary. |
+| `--gpu` | `--gpu rtx4090` | Check if the model fits. Accepts GPU names (`rtx4090`, `b200`, `rx7900xtx`), explicit VRAM limits in GB (`--gpu 24`), or local hardware auto-discovery (`--gpu auto`). |
+| `--context` | `--context 32768` | Adjust the target KV cache length. Essential for calculating the dynamic memory footprint of long-context models. Defaults to `8192`. |
+| `--max-vram` | `--max-vram 80` | Adjusts the color-coded heat mapping thresholds (Green/Yellow/Red) in the terminal output to match a specific hardware ceiling. |
 
 ## Architecture
 

@@ -36,11 +36,17 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=8.0,
         help="Maximum VRAM in GB for color-coding thresholds.",
     )
+    parser.add_argument(
+        "--gpu",
+        type=str,
+        default=None,
+        help="Target GPU hardware (e.g. 'RTX4090' or 'auto') to check if the model fits.",
+    )
 
     return parser.parse_args(argv)
 
 
-def analyze_model(file_path: str, context_override: int | None) -> dict:
+def analyze_model(file_path: str, context_override: int | None, gpu_count: int = 1) -> dict:
     tensors = {}
     config = None
     disk_size = 0.0
@@ -86,7 +92,7 @@ def analyze_model(file_path: str, context_override: int | None) -> dict:
         context_length = min(8192, max_context) if max_context else 8192
         is_default_context = True
 
-    footprint = calculate_footprint(tensors, context_length=context_length, config=config)
+    footprint = calculate_footprint(tensors, context_length=context_length, config=config, gpu_count=gpu_count)
     num_layers = footprint["num_layers"]
     arch_name = identify_architecture_name(tensors, num_layers, config)
 
@@ -111,28 +117,38 @@ def analyze_model(file_path: str, context_override: int | None) -> dict:
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
 
+    gpu_name_display = None
+    gpu_count = 1
+    if args.gpu:
+        from modelinfo.hardware import resolve_gpu
+        try:
+            gpu_name_display, args.max_vram, gpu_count = resolve_gpu(args.gpu)
+        except Exception as e:
+            console.print(f"[red]{e}[/red]")
+            return 1
+
     if len(args.file) > 1:
         models = []
         for model_path in args.file:
             try:
-                info = analyze_model(model_path, args.context)
+                info = analyze_model(model_path, args.context, gpu_count)
                 models.append((model_path.split("/")[-1], info))
             except Exception as e:
                 console.print(f"[red]Error analyzing model '{model_path}': {e}[/red]")
                 return 1
             
-        print_compare_info(models, args.max_vram)
+        print_compare_info(models, args.max_vram, gpu_name=gpu_name_display)
         return 0
         
     file_path = args.file[0]
     
     try:
-        info = analyze_model(file_path, args.context)
+        info = analyze_model(file_path, args.context, gpu_count)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         return 1
 
-    print_model_info(**info, max_vram_gb=args.max_vram)
+    print_model_info(**info, max_vram_gb=args.max_vram, gpu_name=gpu_name_display)
     return 0
 
 

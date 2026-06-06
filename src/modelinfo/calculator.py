@@ -29,7 +29,7 @@ def _get_bytes_per_param(dtype: str) -> float:
     """Return the size in bytes for a given data type."""
     return DTYPE_BYTES.get(dtype.upper(), 2.0)
 
-def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_size: int = 1, config: Dict[str, Any] = None) -> Dict[str, Any]:
+def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_size: int = 1, config: Dict[str, Any] = None, gpu_count: int = 1) -> Dict[str, Any]:
     """
     Calculate the memory footprint of a model based on its tensors and context length.
     """
@@ -62,7 +62,7 @@ def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_
     
     primary_dtype = max(dtype_counts.items(), key=lambda x: x[1])[0] if dtype_counts else "Unknown"
     
-    CUDA_CONTEXT_MB = 600
+    CUDA_CONTEXT_MB = 600 * gpu_count
     overhead_bytes = CUDA_CONTEXT_MB * 1024 * 1024
     
     return {

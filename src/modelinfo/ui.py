@@ -46,7 +46,8 @@ def print_model_info(
     is_default_context: bool,
     tensors: Dict[str, Any],
     max_context: int | None = None,
-    max_vram_gb: float = 8.0
+    max_vram_gb: float = 8.0,
+    gpu_name: str | None = None
 ) -> None:
     summary = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
     summary.add_column("Property", style="bold")
@@ -101,6 +102,16 @@ def print_model_info(
     summary.add_row("Disk size:", disk_text)
     summary.add_row("VRAM (est):", vram_display)
     
+    if gpu_name:
+        utilization = vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
+        if utilization <= 0.90:
+            fit_text = f"[green]✓ Fits comfortably in {gpu_name} ({max_vram_gb} GB)[/green]"
+        elif utilization <= 0.99:
+            fit_text = f"[yellow]⚠ Warning: Extreme hardware limit on {gpu_name}. High risk of fragmentation OOM.[/yellow]"
+        else:
+            fit_text = f"[red]✗ No (Requires {format_bytes(vram_bytes)}, Hardware has {max_vram_gb} GB)[/red]"
+        summary.add_row("Hardware Fit:", fit_text)
+    
     console.print(summary)
 
     if missing_shards > 0:
@@ -139,13 +150,15 @@ def print_model_info(
         
     console.print(tensor_table)
 
-def print_compare_info(models: list, max_vram_gb: float = 8.0) -> None:
+def print_compare_info(models: list, max_vram_gb: float = 8.0, gpu_name: str | None = None) -> None:
     table = Table(box=None, show_header=True, header_style="bold", pad_edge=False, padding=(0, 2))
     table.add_column("Model")
     table.add_column("Params")
     table.add_column("Dtype")
     table.add_column("Context")
     table.add_column("VRAM")
+    if gpu_name:
+        table.add_column("Fits")
     
     for name, info in models:
         footprint = info["footprint"]
@@ -168,7 +181,18 @@ def print_compare_info(models: list, max_vram_gb: float = 8.0) -> None:
         vram_color = get_vram_color(vram_bytes, max_vram_gb)
         vram_text = f"[{vram_color}]{format_bytes(vram_bytes)}[/{vram_color}]"
         
-        table.add_row(name, param_text, dtype_text, context_text, vram_text)
+        row = [name, param_text, dtype_text, context_text, vram_text]
+        
+        if gpu_name:
+            utilization = vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
+            if utilization <= 0.90:
+                row.append("[green]✓[/green]")
+            elif utilization <= 0.99:
+                row.append("[yellow]⚠[/yellow]")
+            else:
+                row.append("[red]✗[/red]")
+                
+        table.add_row(*row)
         
     console.print(table)
 
