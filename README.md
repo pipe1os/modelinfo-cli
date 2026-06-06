@@ -20,6 +20,10 @@ It reads binary headers directly using the Python standard library. By bypassing
 - **Secure Pickling**: Inspects legacy `.pt` files without executing arbitrary code by using a highly restricted `pickle.Unpickler`.
 - **Terminal UI**: Groups repetitive structural layers and color-codes VRAM heatmaps using `rich`. Breaks down memory footprints into Weights, KV Cache, and Overhead.
 
+> [!NOTE]
+> **A Note on Performance & Remote Fetching**
+> Local `.gguf` and `.safetensors` files are parsed in under 100ms. However, querying remote Hugging Face repositories takes **1 to 10 seconds**. This is an intentional trade-off. To remain zero-dependency, `modelinfo` negotiates raw TCP/TLS via Python `urllib` instead of loading PyTorch. For massive sharded models (e.g., 100+ shards), it must fetch every header individually, capped at an 8-worker thread pool to prevent Cloudflare IP bans. Waiting ~8 seconds to map a model is faster than downloading 400GB just to see if it fits your hardware.
+
 ## Installation
 
 Install directly from PyPI:
