@@ -4,6 +4,8 @@
 ![Dependencies](https://img.shields.io/badge/dependencies-rich-green.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
+![ModelInfo Demo](modelinfo.gif)
+
 ModelInfo is a terminal-native utility that inspects machine learning model checkpoints (`.safetensors`, `.gguf`, `.pt`) and calculates hardware requirements completely offline.
 
 It reads binary headers directly using the Python standard library. By bypassing full tensor payload loading and strictly excluding heavy ecosystems like PyTorch or HuggingFace, the tool executes in under 100 milliseconds.
