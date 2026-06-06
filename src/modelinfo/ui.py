@@ -9,11 +9,11 @@ from modelinfo.calculator import format_bytes, format_params
 
 console = Console()
 
-def get_vram_color(bytes_size: float) -> str:
+def get_vram_color(bytes_size: float, max_vram_gb: float = 8.0) -> str:
     gb = bytes_size / (1024**3)
-    if gb < 8.0:
+    if gb <= max_vram_gb:
         return "green"
-    elif gb < 16.0:
+    elif gb <= max_vram_gb * 2:
         return "yellow"
     else:
         return "red"
@@ -45,7 +45,8 @@ def print_model_info(
     context_length: int,
     is_default_context: bool,
     tensors: Dict[str, Any],
-    max_context: int | None = None
+    max_context: int | None = None,
+    max_vram_gb: float = 8.0
 ) -> None:
     summary = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
     summary.add_column("Property", style="bold")
@@ -67,7 +68,7 @@ def print_model_info(
         param_text = format_params(footprint["total_params"])
         disk_text = format_bytes(disk_size)
         vram_bytes = footprint["total_memory_bytes"]
-        vram_color = "green" if vram_bytes < 8 * 1024**3 else "yellow" if vram_bytes < 16 * 1024**3 else "red"
+        vram_color = get_vram_color(vram_bytes, max_vram_gb)
         
         vram_text = f"~{format_bytes(vram_bytes)} Total Minimum Required"
         vram_display = f"[{vram_color}]{vram_text}[/{vram_color}]\n"
@@ -137,3 +138,37 @@ def print_model_info(
         tensor_table.add_row(display_name, shape_str, dtype.lower(), param_str)
         
     console.print(tensor_table)
+
+def print_compare_info(models: list, max_vram_gb: float = 8.0) -> None:
+    table = Table(box=None, show_header=True, header_style="bold", pad_edge=False, padding=(0, 2))
+    table.add_column("Model")
+    table.add_column("Params")
+    table.add_column("Dtype")
+    table.add_column("Context")
+    table.add_column("VRAM")
+    
+    for name, info in models:
+        footprint = info["footprint"]
+        
+        param_full = format_params(footprint["total_params"])
+        if "(" in param_full:
+            param_text = param_full.split("(")[-1].replace(")", "")
+        else:
+            param_text = param_full
+            
+        dtype_text = footprint.get("primary_dtype", "Unknown")
+            
+        context_length = info.get("context_length", 0)
+        if context_length >= 1024 and context_length % 1024 == 0:
+            context_text = f"{context_length // 1024}K"
+        else:
+            context_text = f"{context_length:,}"
+            
+        vram_bytes = footprint["total_memory_bytes"]
+        vram_color = get_vram_color(vram_bytes, max_vram_gb)
+        vram_text = f"[{vram_color}]{format_bytes(vram_bytes)}[/{vram_color}]"
+        
+        table.add_row(name, param_text, dtype_text, context_text, vram_text)
+        
+    console.print(table)
+
