@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
  
+## [1.3.0] - 2026-06-06
+
+This release adds comprehensive hardware fit diagnostics, dynamic GPU scaling, and side-by-side model comparison to instantly evaluate operational deployment trade-offs.
+
+### Added
+- **Hardware Discovery Engine:** Added the `--gpu` flag with multi-vendor normalization (NVIDIA, AMD, Intel) to calculate if a model fits within specific hardware constraints. Supports named GPUs (`rtx4090`), explicit sizes (`24`), and native local hardware discovery (`auto`).
+- **Fragmentation Defense:** Implemented a 3-tier UI heuristic (✓ Safe, ⚠ Warning, ✗ Fail) to defend against memory fragmentation and generation-time transient spikes.
+- **Side-by-Side Comparison:** Passing multiple models via the CLI (`modelinfo modelA modelB`) now implicitly triggers a dedicated side-by-side comparison table, surfacing parameter counts, context lengths, and VRAM footprints to evaluate architectural trade-offs.
+
+### Changed
+- **Multi-GPU Overhead Scaling:** The CUDA context initialization overhead (600 MB) now dynamically scales based on the detected `gpu_count` to prevent silent prefill OOMs on multi-GPU deployments.
+- **Mathematical Transparency:** Enforced the `Dtype` column mathematically into the comparative UI to visualize exactly why quantization scales VRAM footprints downward.
+
 ## [1.2.0] - 2026-06-04
 
 This release adds remote Hugging Face Hub inspection, dynamic VRAM overhead modeling, and sensible context defaults for operational inference planning.
