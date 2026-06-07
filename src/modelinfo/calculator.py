@@ -50,7 +50,18 @@ def _get_bytes_per_param(dtype: str) -> float:
     """Return the size in bytes for a given data type."""
     return DTYPE_BYTES.get(dtype.upper(), 2.0)
 
-def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_size: int = 1, config: Dict[str, Any] = None, gpu_count: int = 1) -> Dict[str, Any]:
+def calculate_footprint(
+    tensors: Dict[str, Any], 
+    context_length: int = 0, 
+    batch_size: int = 1, 
+    config: Dict[str, Any] = None, 
+    gpu_count: int = 1,
+    topology: str = "pcie4",
+    strategy: str = "tp",
+    is_vllm: bool = False,
+    gpu_vram_bytes: float = 0.0,
+    gpu_util: float = 0.9
+) -> Dict[str, Any]:
     """
     Calculate the memory footprint of a model based on its tensors and context length.
     """
@@ -91,25 +102,59 @@ def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_
     kv_cache_bytes = 2 * num_layers * kv_dim * context_length * batch_size * 2
     
     primary_dtype = max(dtype_counts.items(), key=lambda x: x[1])[0] if dtype_counts else "Unknown"
-    
-    CUDA_CONTEXT_MB = 600 * gpu_count
-    overhead_bytes = CUDA_CONTEXT_MB * 1024 * 1024
-    
-    # MLOps Heuristic: ~12% memory efficiency penalty for TP/Pipeline sharding 
-    # (NCCL buffers, context duplication, KV fragmentation) across multi-GPU setups.
+    # Topology & Strategy Penalties
+    penalty_percentage = 0.0
     if gpu_count > 1:
-        overhead_bytes += (base_memory_bytes + kv_cache_bytes) * 0.12
+        if strategy == "pp":
+            penalty_percentage = 0.0
+        else: # strategy == "tp"
+            if topology == "nvlink":
+                penalty_percentage = 0.04
+            elif topology == "pcie3":
+                penalty_percentage = 0.20
+            else: # pcie4
+                penalty_percentage = 0.12
+                
+    distributed_overhead = base_memory_bytes * penalty_percentage if gpu_count > 1 else 0.0
+    
+    vllm_metrics = {}
+    if is_vllm and gpu_vram_bytes > 0:
+        usable_vram = gpu_vram_bytes * gpu_util
+        remaining_vram = usable_vram - (base_memory_bytes + distributed_overhead)
+        
+        bytes_per_token = 2 * num_layers * kv_dim * 2
+        
+        max_serving_capacity = 0
+        if remaining_vram > 0 and bytes_per_token > 0:
+            max_serving_capacity = math.floor(remaining_vram / bytes_per_token)
+            
+        overhead_bytes = distributed_overhead
+        total_memory_bytes = base_memory_bytes + overhead_bytes
+        
+        vllm_metrics = {
+            "usable_vram": usable_vram,
+            "static_weights": base_memory_bytes,
+            "distributed_penalty": distributed_overhead,
+            "paged_kv_pool": max(0.0, remaining_vram),
+            "max_serving_capacity": max_serving_capacity
+        }
+    else:
+        CUDA_CONTEXT_MB = 600 * gpu_count
+        overhead_bytes = (CUDA_CONTEXT_MB * 1024 * 1024) + distributed_overhead
+        total_memory_bytes = base_memory_bytes + kv_cache_bytes + overhead_bytes
     
     return {
         "total_params": total_params,
         "base_memory_bytes": base_memory_bytes,
         "kv_cache_bytes": kv_cache_bytes,
         "overhead_bytes": overhead_bytes,
-        "total_memory_bytes": base_memory_bytes + kv_cache_bytes + overhead_bytes,
+        "total_memory_bytes": total_memory_bytes,
         "num_layers": num_layers,
         "kv_dim": kv_dim,
         "primary_dtype": primary_dtype,
-        "kv_is_estimate": is_estimate
+        "kv_is_estimate": is_estimate,
+        "penalty_percentage": penalty_percentage,
+        "vllm_metrics": vllm_metrics
     }
 
 def format_bytes(size_bytes: float) -> str:

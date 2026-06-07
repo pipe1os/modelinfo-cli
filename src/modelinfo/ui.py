@@ -49,7 +49,12 @@ def print_model_info(
     max_vram_gb: float = 8.0,
     gpu_name: str | None = None,
     is_lazy: bool = False,
-    gpu_count: int = 1
+    gpu_count: int = 1,
+    topology: str = "pcie4",
+    strategy: str = "tp",
+    is_vllm: bool = False,
+    gpu_vram_gb: float = 0.0,
+    gpu_util: float = 0.9
 ) -> None:
     summary = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
     summary.add_column("Property", style="bold")
@@ -95,7 +100,8 @@ def print_model_info(
         
         overhead_bytes = footprint.get("overhead_bytes", 600 * 1024 * 1024)
         if gpu_count > 1:
-            vram_display += f"  └─ Overhead:   {format_bytes(overhead_bytes)} (CUDA Contexts + Distributed Penalty)"
+            penalty_str = f"TP/{topology}" if strategy == "tp" else "PP"
+            vram_display += f"  └─ Overhead:   {format_bytes(overhead_bytes)} (CUDA Contexts + {penalty_str} Penalty)"
         else:
             vram_display += f"  └─ Overhead:   {format_bytes(overhead_bytes)} (CUDA Context + Activations)"
 
@@ -105,17 +111,42 @@ def print_model_info(
     summary.add_row("Parameters:", param_text)
     summary.add_row("Dtype:", footprint["primary_dtype"])
     summary.add_row("Disk size:", disk_text)
-    summary.add_row("VRAM (est):", vram_display)
     
-    if gpu_name:
-        utilization = vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
-        if utilization <= 0.90:
-            fit_text = f"[green]✓ Fits comfortably in {gpu_name} ({max_vram_gb:.1f} GB)[/green]"
-        elif utilization <= 0.99:
-            fit_text = f"[yellow]⚠ Warning: Extreme hardware limit on {gpu_name}. High risk of fragmentation OOM.[/yellow]"
+    if is_vllm:
+        vllm = footprint.get("vllm_metrics", {})
+        usable_vram = vllm.get("usable_vram", 0.0)
+        static_weights = vllm.get("static_weights", 0.0)
+        distributed_penalty = vllm.get("distributed_penalty", 0.0)
+        paged_kv_pool = vllm.get("paged_kv_pool", 0.0)
+        max_capacity = vllm.get("max_serving_capacity", 0)
+        
+        summary.add_row("VRAM Ceiling:", f"{max_vram_gb:.1f} GB ({gpu_name if gpu_name else 'Target'})")
+        
+        alloc_display = f"  ├─ Usable VRAM:      {format_bytes(usable_vram)} ({int(gpu_util*100)}% gpu_memory_utilization)\n"
+        alloc_display += f"  ├─ Static Weights:  -{format_bytes(static_weights)} ({footprint.get('primary_dtype', 'BF16')})\n"
+        if gpu_count > 1:
+            penalty_str = f"TP/{topology}" if strategy == "tp" else "PP"
+            alloc_display += f"  ├─ {penalty_str} Penalty: -{format_bytes(distributed_penalty)}\n"
+        alloc_display += f"  └─ Paged KV Pool:   = {format_bytes(paged_kv_pool)} Available for Context"
+        
+        summary.add_row("vLLM Allocation:", alloc_display)
+        summary.add_row("Max Capacity:", f"~{max_capacity:,} Tokens (Across all concurrent batches)")
+        
+        if paged_kv_pool <= 0:
+            summary.add_row("Hardware Fit:", "[red]✗ No (OOM before serving any tokens)[/red]")
         else:
-            fit_text = f"[red]✗ No (Requires {format_bytes(vram_bytes)}, Hardware has {max_vram_gb:.1f} GB)[/red]"
-        summary.add_row("Hardware Fit:", fit_text)
+            summary.add_row("Hardware Fit:", "[green]✓ Yes[/green]")
+    else:
+        summary.add_row("VRAM (est):", vram_display)
+        if gpu_name:
+            utilization = vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
+            if utilization <= 0.90:
+                fit_text = f"[green]✓ Fits comfortably in {gpu_name} ({max_vram_gb:.1f} GB)[/green]"
+            elif utilization <= 0.99:
+                fit_text = f"[yellow]⚠ Warning: Extreme hardware limit on {gpu_name}. High risk of fragmentation OOM.[/yellow]"
+            else:
+                fit_text = f"[red]✗ No (Requires {format_bytes(vram_bytes)}, Hardware has {max_vram_gb:.1f} GB)[/red]"
+            summary.add_row("Hardware Fit:", fit_text)
     
     console.print(summary)
 

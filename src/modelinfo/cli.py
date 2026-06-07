@@ -47,11 +47,46 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="Deep dive: Fetch all remote tensor shards to display the exact tensor size breakdown.",
     )
+    parser.add_argument(
+        "--topology",
+        type=str,
+        choices=["nvlink", "pcie4", "pcie3"],
+        default="pcie4",
+        help="Interconnect topology to calculate distributed communication overhead.",
+    )
+    parser.add_argument(
+        "--strategy",
+        type=str,
+        choices=["tp", "pp"],
+        default="tp",
+        help="Distributed parallelism strategy (Tensor vs Pipeline).",
+    )
+    parser.add_argument(
+        "--vllm",
+        action="store_true",
+        help="Enable Subtractive Math Engine: Calculate max context tokens using vLLM PagedAttention allocation.",
+    )
+    parser.add_argument(
+        "--gpu-util",
+        type=float,
+        default=0.9,
+        help="vLLM gpu_memory_utilization ratio (default 0.9). Reserves 10 percent for PyTorch context.",
+    )
 
     return parser.parse_args(argv)
 
 
-def analyze_model(file_path: str, context_override: int | None, gpu_count: int = 1, fetch_tensors: bool = False) -> dict:
+def analyze_model(
+    file_path: str, 
+    context_override: int | None, 
+    gpu_count: int = 1, 
+    fetch_tensors: bool = False,
+    topology: str = "pcie4",
+    strategy: str = "tp",
+    is_vllm: bool = False,
+    gpu_vram_gb: float = 0.0,
+    gpu_util: float = 0.9
+) -> dict:
     tensors = {}
     config = None
     disk_size = 0.0
@@ -97,7 +132,17 @@ def analyze_model(file_path: str, context_override: int | None, gpu_count: int =
         context_length = min(8192, max_context) if max_context else 8192
         is_default_context = True
 
-    footprint = calculate_footprint(tensors, context_length=context_length, config=config, gpu_count=gpu_count)
+    footprint = calculate_footprint(
+        tensors, 
+        context_length=context_length,
+        config=config,
+        gpu_count=gpu_count,
+        topology=topology,
+        strategy=strategy,
+        is_vllm=is_vllm,
+        gpu_vram_bytes=gpu_vram_gb * 1024**3 if gpu_vram_gb else 0.0,
+        gpu_util=gpu_util
+    )
     num_layers = footprint["num_layers"]
     arch_name = identify_architecture_name(tensors, num_layers, config)
 
@@ -117,7 +162,12 @@ def analyze_model(file_path: str, context_override: int | None, gpu_count: int =
         "tensors": tensors,
         "max_context": max_context,
         "is_lazy": tensors.get("__metadata__", {}).get("lazy_fetch", False),
-        "gpu_count": gpu_count
+        "gpu_count": gpu_count,
+        "topology": topology,
+        "strategy": strategy,
+        "is_vllm": is_vllm,
+        "gpu_vram_gb": gpu_vram_gb,
+        "gpu_util": gpu_util
     }
 
 
@@ -125,20 +175,33 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
 
     gpu_name_display = None
+    gpu_vram_gb = None
     gpu_count = 1
-    if args.gpu:
+    
+    if args.gpu or args.vllm:
+        target = args.gpu if args.gpu else "auto"
         from modelinfo.hardware import resolve_gpu
-        try:
-            gpu_name_display, args.max_vram, gpu_count = resolve_gpu(args.gpu)
-        except Exception as e:
-            console.print(f"[red]{e}[/red]")
-            return 1
+        gpu_name_display, gpu_vram_gb, gpu_count = resolve_gpu(target)
 
     if len(args.file) > 1:
+        if args.vllm:
+            console.print("[red]Error: Side-by-side comparison does not currently support the subtractive --vllm engine. Compare models sequentially or remove --vllm.[/red]")
+            return 1
+            
         models = []
         for model_path in args.file:
             try:
-                info = analyze_model(model_path, args.context, gpu_count, fetch_tensors=args.tensors)
+                info = analyze_model(
+                    model_path, 
+                    args.context, 
+                    gpu_count, 
+                    fetch_tensors=args.tensors,
+                    topology=args.topology,
+                    strategy=args.strategy,
+                    is_vllm=args.vllm,
+                    gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
+                    gpu_util=args.gpu_util
+                )
                 models.append((model_path.split("/")[-1], info))
             except Exception as e:
                 console.print(f"[red]Error analyzing model '{model_path}': {e}[/red]")
@@ -150,12 +213,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     file_path = args.file[0]
     
     try:
-        info = analyze_model(file_path, args.context, gpu_count, fetch_tensors=args.tensors)
+        info = analyze_model(
+            file_path, 
+            args.context, 
+            gpu_count, 
+            fetch_tensors=args.tensors,
+            topology=args.topology,
+            strategy=args.strategy,
+            is_vllm=args.vllm,
+            gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
+            gpu_util=args.gpu_util
+        )
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         return 1
 
-    print_model_info(**info, max_vram_gb=args.max_vram, gpu_name=gpu_name_display)
+    print_model_info(**info, max_vram_gb=gpu_vram_gb if gpu_vram_gb else 8.0, gpu_name=gpu_name_display)
     return 0
 
 
