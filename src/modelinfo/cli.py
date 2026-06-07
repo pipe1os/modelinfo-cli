@@ -116,7 +116,8 @@ def analyze_model(file_path: str, context_override: int | None, gpu_count: int =
         "is_default_context": is_default_context,
         "tensors": tensors,
         "max_context": max_context,
-        "is_lazy": tensors.get("__metadata__", {}).get("lazy_fetch", False)
+        "is_lazy": tensors.get("__metadata__", {}).get("lazy_fetch", False),
+        "gpu_count": gpu_count
     }
 
 

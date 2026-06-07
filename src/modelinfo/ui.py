@@ -48,7 +48,8 @@ def print_model_info(
     max_context: int | None = None,
     max_vram_gb: float = 8.0,
     gpu_name: str | None = None,
-    is_lazy: bool = False
+    is_lazy: bool = False,
+    gpu_count: int = 1
 ) -> None:
     summary = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
     summary.add_column("Property", style="bold")
@@ -93,7 +94,10 @@ def print_model_info(
         vram_display += f"  ├─ KV Cache:   {format_bytes(kv_cache_bytes)}{kv_note}\n"
         
         overhead_bytes = footprint.get("overhead_bytes", 600 * 1024 * 1024)
-        vram_display += f"  └─ Overhead:   {format_bytes(overhead_bytes)} (CUDA Context + Activations)"
+        if gpu_count > 1:
+            vram_display += f"  └─ Overhead:   {format_bytes(overhead_bytes)} (CUDA Contexts + Distributed Penalty)"
+        else:
+            vram_display += f"  └─ Overhead:   {format_bytes(overhead_bytes)} (CUDA Context + Activations)"
 
     summary.add_row("Format:", format_name)
     summary.add_row("Architecture:", arch_name)

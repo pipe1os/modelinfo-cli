@@ -95,6 +95,11 @@ def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_
     CUDA_CONTEXT_MB = 600 * gpu_count
     overhead_bytes = CUDA_CONTEXT_MB * 1024 * 1024
     
+    # MLOps Heuristic: ~12% memory efficiency penalty for TP/Pipeline sharding 
+    # (NCCL buffers, context duplication, KV fragmentation) across multi-GPU setups.
+    if gpu_count > 1:
+        overhead_bytes += (base_memory_bytes + kv_cache_bytes) * 0.12
+    
     return {
         "total_params": total_params,
         "base_memory_bytes": base_memory_bytes,
