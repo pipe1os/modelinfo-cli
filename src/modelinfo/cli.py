@@ -42,11 +42,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Target GPU hardware (e.g. 'RTX4090' or 'auto') to check if the model fits.",
     )
+    parser.add_argument(
+        "--tensors",
+        action="store_true",
+        help="Deep dive: Fetch all remote tensor shards to display the exact tensor size breakdown.",
+    )
 
     return parser.parse_args(argv)
 
 
-def analyze_model(file_path: str, context_override: int | None, gpu_count: int = 1) -> dict:
+def analyze_model(file_path: str, context_override: int | None, gpu_count: int = 1, fetch_tensors: bool = False) -> dict:
     tensors = {}
     config = None
     disk_size = 0.0
@@ -55,7 +60,7 @@ def analyze_model(file_path: str, context_override: int | None, gpu_count: int =
     
     if not os.path.exists(file_path) and not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
         from modelinfo.parsers.huggingface import fetch_huggingface_repo
-        tensors, config, format_name, disk_size = fetch_huggingface_repo(file_path)
+        tensors, config, format_name, disk_size = fetch_huggingface_repo(file_path, fetch_tensors=fetch_tensors)
     elif file_path_lower.endswith(".safetensors") or file_path_lower.endswith(".index.json"):
         tensors = parse_safetensors_header(file_path)
         format_name = "SafeTensors"
@@ -110,7 +115,8 @@ def analyze_model(file_path: str, context_override: int | None, gpu_count: int =
         "context_length": context_length,
         "is_default_context": is_default_context,
         "tensors": tensors,
-        "max_context": max_context
+        "max_context": max_context,
+        "is_lazy": tensors.get("__metadata__", {}).get("lazy_fetch", False)
     }
 
 
@@ -131,7 +137,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         models = []
         for model_path in args.file:
             try:
-                info = analyze_model(model_path, args.context, gpu_count)
+                info = analyze_model(model_path, args.context, gpu_count, fetch_tensors=args.tensors)
                 models.append((model_path.split("/")[-1], info))
             except Exception as e:
                 console.print(f"[red]Error analyzing model '{model_path}': {e}[/red]")
@@ -143,7 +149,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     file_path = args.file[0]
     
     try:
-        info = analyze_model(file_path, args.context, gpu_count)
+        info = analyze_model(file_path, args.context, gpu_count, fetch_tensors=args.tensors)
     except Exception as e:
         console.print(f"[red]Error: {e}[/red]")
         return 1

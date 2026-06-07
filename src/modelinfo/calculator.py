@@ -4,19 +4,40 @@ from typing import Any, Dict
 from modelinfo.architecture import extract_architecture
 
 DTYPE_BYTES = {
-    "F64": 8,
-    "F32": 4,
-    "F16": 2,
-    "BF16": 2,
-    "F8": 1,
-    "F8_E5M2": 1,
-    "F8_E4M3": 1,
-    "I64": 8,
-    "I32": 4,
-    "I16": 2,
-    "I8": 1,
-    "U64": 8,
-    "U32": 4,
+    "F64": 8.0,
+    "F32": 4.0,
+    "F16": 2.0,
+    "BF16": 2.0,
+    "F8": 1.0,
+    "F8_E5M2": 1.0,
+    "F8_E4M3": 1.0,
+    "I64": 8.0,
+    "I32": 4.0,
+    "I16": 2.0,
+    "I8": 1.0,
+    "U64": 8.0,
+    "U32": 4.0,
+    "Q8_0": 1.0625,
+    "Q8_1": 1.0625,
+    "Q8_K": 1.0625,
+    "Q6_K": 0.828125,
+    "Q5_0": 0.6875,
+    "Q5_1": 0.75,
+    "Q5_K": 0.6875,
+    "Q4_0": 0.5625,
+    "Q4_1": 0.625,
+    "Q4_K": 0.59375,
+    "Q3_K": 0.4375,
+    "Q2_K": 0.34375,
+    "IQ4_NL": 0.53125,
+    "IQ4_XS": 0.53125,
+    "IQ3_S": 0.4375,
+    "IQ3_XXS": 0.385,
+    "IQ2_S": 0.3125,
+    "IQ2_XS": 0.296875,
+    "IQ2_XXS": 0.28125,
+    "IQ1_M": 0.21875,
+    "IQ1_S": 0.1953125,
     "Q8": 1.06,
     "Q6": 0.82,
     "Q5": 0.68,
@@ -37,22 +58,31 @@ def calculate_footprint(tensors: Dict[str, Any], context_length: int = 0, batch_
     base_memory_bytes = 0.0
     dtype_counts: Dict[str, int] = {}
     
-    for name, metadata in tensors.items():
-        if name == "__metadata__":
-            continue
+    is_lazy = tensors.get("__metadata__", {}).get("lazy_fetch", False)
+    
+    if is_lazy:
+        base_memory_bytes = tensors.get("__metadata__", {}).get("total_size", 0.0)
+        # Assume predominantly FP16/BF16 for modern Hub architectures
+        primary_dtype = "BF16"
+        dtype_counts[primary_dtype] = 1
+        total_params = int(base_memory_bytes / 2.0)
+    else:
+        for name, metadata in tensors.items():
+            if name == "__metadata__":
+                continue
+                
+            shape = metadata.get("shape", [])
+            if not shape:
+                continue
+                
+            param_count = math.prod(shape)
+            total_params += param_count
             
-        shape = metadata.get("shape", [])
-        if not shape:
-            continue
+            dtype = metadata.get("dtype", "F16").upper()
+            dtype_counts[dtype] = dtype_counts.get(dtype, 0) + 1
             
-        param_count = math.prod(shape)
-        total_params += param_count
-        
-        dtype = metadata.get("dtype", "F16").upper()
-        dtype_counts[dtype] = dtype_counts.get(dtype, 0) + 1
-        
-        bytes_per_param = _get_bytes_per_param(dtype)
-        base_memory_bytes += param_count * bytes_per_param
+            bytes_per_param = _get_bytes_per_param(dtype)
+            base_memory_bytes += param_count * bytes_per_param
         
     num_layers, kv_dim, is_estimate = extract_architecture(tensors, config)
     

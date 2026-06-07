@@ -76,7 +76,7 @@ def _fetch_safetensors_header(repo_id: str, filename: str) -> Dict[str, Any]:
         
     return json.loads(json_bytes)
 
-def fetch_huggingface_repo(repo_id: str) -> Tuple[Dict[str, Any], Dict[str, Any] | None, str, float]:
+def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any] | None, str, float]:
     """
     Fetches the metadata directly from the Hugging Face Hub over the network.
     Returns: (tensors, config, format_name, disk_size)
@@ -110,31 +110,41 @@ def fetch_huggingface_repo(repo_id: str) -> Tuple[Dict[str, Any], Dict[str, Any]
         
         total_size = index_data.get("metadata", {}).get("total_size", 0.0)
         
-        def fetch_shard(shard: str):
-            return shard, _fetch_safetensors_header(repo_id, shard)
-            
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(unique_shards))) as executor:
-            future_to_shard = {executor.submit(fetch_shard, shard): shard for shard in unique_shards}
-            for future in concurrent.futures.as_completed(future_to_shard):
-                shard, shard_header = future.result()
-                for k, v in shard_header.items():
-                    if k != "__metadata__":
-                        tensors[k] = v
-                        
-        tensors["__metadata__"] = {
-            "missing_shards": 0,
-            "total_shards": len(unique_shards),
-            "is_sharded": True
-        }
+        if config and not fetch_tensors and total_size > 0:
+            # Lazy Fetch Paradigm
+            for tensor_name in weight_map.keys():
+                tensors[tensor_name] = {"shape": [], "dtype": "BF16"}
+                
+            tensors["__metadata__"] = {
+                "missing_shards": 0,
+                "total_shards": len(unique_shards),
+                "is_sharded": True,
+                "lazy_fetch": True,
+                "total_size": total_size
+            }
+        else:
+            def fetch_shard(shard: str):
+                return shard, _fetch_safetensors_header(repo_id, shard)
+                
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(unique_shards))) as executor:
+                future_to_shard = {executor.submit(fetch_shard, shard): shard for shard in unique_shards}
+                for future in concurrent.futures.as_completed(future_to_shard):
+                    shard, shard_header = future.result()
+                    for k, v in shard_header.items():
+                        if k != "__metadata__":
+                            tensors[k] = v
+                            
+            tensors["__metadata__"] = {
+                "missing_shards": 0,
+                "total_shards": len(unique_shards),
+                "is_sharded": True
+            }
         format_name = "SafeTensors"
         
     elif "model.safetensors" in filenames:
         # Single SafeTensors
-        header = _fetch_safetensors_header(repo_id, "model.safetensors")
-        tensors = header
-        format_name = "SafeTensors"
         
-        # We don't have total_size from index, so we could get it from Content-Length or just leave it 0
+        # Determine total size first
         req = urllib.request.Request(f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors", method="HEAD")
         token = _get_hf_token()
         if token:
@@ -144,7 +154,12 @@ def fetch_huggingface_repo(repo_id: str) -> Tuple[Dict[str, Any], Dict[str, Any]
                 total_size = int(response.headers.get("Content-Length", 0))
         except Exception:
             pass
+
+        header = _fetch_safetensors_header(repo_id, "model.safetensors")
+        tensors = header
             
+        format_name = "SafeTensors"
+        
     else:
         raise ValueError(f"Repository {repo_id} does not contain SafeTensors weights.")
         

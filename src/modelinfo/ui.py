@@ -47,7 +47,8 @@ def print_model_info(
     tensors: Dict[str, Any],
     max_context: int | None = None,
     max_vram_gb: float = 8.0,
-    gpu_name: str | None = None
+    gpu_name: str | None = None,
+    is_lazy: bool = False
 ) -> None:
     summary = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
     summary.add_column("Property", style="bold")
@@ -122,6 +123,10 @@ def print_model_info(
 
     console.print()
     
+    if is_lazy:
+        console.print("[yellow]Top Tensors omitted for speed. Run with --tensors to fetch remote shards.[/yellow]")
+        return
+        
     console.print("Top Tensors by Size:", style="bold")
     
     grouped_tensors = group_tensors_by_size(tensors)
