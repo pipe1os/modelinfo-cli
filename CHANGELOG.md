@@ -6,6 +6,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
  
+## [1.4.1] - 2026-06-07
+
+### Changed
+- Updated repository documentation to reflect precise terminology for new hardware features.
+
 ## [1.4.0] - 2026-06-07
 
 This release adds multi-GPU hardware topology modeling and a vLLM serving capacity engine for inference planning. We also overhauled how remote Hub interactions work to speed up metadata fetching.
