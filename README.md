@@ -6,25 +6,25 @@
 
 ![ModelInfo Demo](modelinfo.gif)
 
-ModelInfo is a terminal-native utility that inspects machine learning model checkpoints (`.safetensors`, `.gguf`, `.pt`) and calculates hardware requirements completely offline.
+ModelInfo is a CLI tool that inspects machine learning model checkpoints (`.safetensors`, `.gguf`, `.pt`) and calculates hardware requirements completely offline.
 
 It reads binary headers directly using the Python standard library. By bypassing full tensor payload loading and strictly excluding heavy ecosystems like PyTorch or HuggingFace, the tool executes in under 100 milliseconds.
 
 ## Features
 
-- **Zero-Dependency Parsing**: Reads the 8-byte JSON prefix of `.safetensors` files and the binary key-value metadata of `.gguf` directly via `struct` and `json`. Reads adjacent `config.json` for architecture fallback.
-- **Remote Hugging Face Hub Inspection**: Inspect any public or gated model directly via its repo ID (e.g., `modelinfo meta-llama/Llama-2-7b-hf`) without downloading the checkpoint. Uses concurrent byte-range requests to read the binary headers directly off the CDN in under 2 seconds.
-- **Sharded Model Support**: Transparently parses `model.safetensors.index.json` to detect multi-file checkpoint distributions, gracefully guarding against partial downloads without crashing.
-- **Dynamic VRAM Estimation**: Extracts underlying model architecture to calculate exact VRAM limits, including dynamic KV cache footprints based on user-specified context lengths.
-- **Hardware Fit Diagnostics**: Pass the `--gpu` flag (e.g. `--gpu RTX4090` or `--gpu auto`) to calculate if the model fits in your specific cluster. Defends against fragmentation OOMs using a 3-tier heuristic (Safe, Warning, Fail), calculates overhead across multi-GPU setups, and enforces Apple Silicon's 75% unified memory wire limit.
-- **Side-by-Side Comparison**: Pass multiple models to automatically trigger a comparison table. Compares parameters, data types, context lengths, and VRAM footprints side-by-side to evaluate trade-offs.
-- **Precise Block Quantization**: Factors in exact byte-scaling coefficients for GGUF formats (e.g., Q8, Q6, Q4) rather than naive averages, eliminating VRAM under-reporting.
-- **Secure Pickling**: Inspects legacy `.pt` files without executing arbitrary code by using a highly restricted `pickle.Unpickler`.
-- **Terminal UI**: Groups repetitive structural layers and color-codes VRAM heatmaps using `rich`. Breaks down memory footprints into Weights, KV Cache, and Overhead.
+- **Zero-Dependency Parsing**: Reads `.safetensors` 8-byte JSON prefixes and `.gguf` binary key-value metadata directly via `struct` and `json` (falling back to `config.json` if needed).
+- **Remote Hugging Face Hub Inspection**: Pass a repo ID (e.g., `meta-llama/Llama-2-7b-hf`) and it uses concurrent byte-range requests to read the headers off the CDN in under 2 seconds. No need to download the checkpoint.
+- Parses `model.safetensors.index.json` to support sharded models without crashing on partial downloads.
+- **Dynamic VRAM & Subtractive vLLM Math**: Calculates exact VRAM limits based on the model's architecture and your target context length. If you use the `--vllm` flag, it switches to a subtractive "Serving Capacity" engine that calculates exactly how many tokens fit in the PagedAttention pool based on your `--gpu-util` ratio.
+- **Hardware Fit Diagnostics**: Check if a model fits your cluster with `--gpu` (e.g. `--gpu RTX4090` or `--gpu auto`). It enforces Apple Silicon's 75% unified memory wire limit, and you can explicitly model multi-GPU NCCL communication penalties with `--topology` and `--strategy`.
+- **Side-by-Side Comparison**: Pass multiple models to trigger a comparison table (parameters, data types, context lengths, VRAM footprints).
+- Uses exact `ggml_type` mappings for GGUF formats to calculate byte-scaling coefficients, preventing VRAM under-reporting.
+- **Secure Pickling**: Inspects legacy `.pt` files safely using a restricted `pickle.Unpickler`.
+- The UI (built with `rich`) groups repetitive layers and color-codes VRAM heatmaps.
 
 > [!NOTE]
 > **A Note on Performance & Remote Fetching**
-> Local `.gguf` and `.safetensors` files are parsed in under 100ms. However, querying remote Hugging Face repositories takes **1 to 10 seconds**. This is an intentional trade-off. To remain zero-dependency, `modelinfo` negotiates raw TCP/TLS via Python `urllib` instead of loading PyTorch. For massive sharded models (e.g., 100+ shards), it must fetch every header individually, capped at an 8-worker thread pool to prevent Cloudflare IP bans. Waiting ~8 seconds to map a model is faster than downloading 400GB just to see if it fits your hardware.
+> Local `.gguf` and `.safetensors` files are parsed in under 100ms. However, querying remote Hugging Face repositories takes **1 to 10 seconds**. To remain zero-dependency, `modelinfo` opens connections via Python `urllib` instead of loading PyTorch. For massive sharded models (e.g., 100+ shards), it must fetch every header individually, capped at an 8-worker thread pool to prevent Cloudflare IP bans. Waiting ~8 seconds to map a model is faster than downloading 400GB just to see if it fits your hardware.
 
 ## Installation
 
@@ -104,6 +104,12 @@ Compare multiple models side-by-side against a hardware target:
 modelinfo mistralai/Mistral-7B-v0.1 Qwen/Qwen2.5-0.5B --gpu 12
 ```
 
+Simulate exactly how many tokens you can serve using vLLM on a specific multi-GPU topology:
+
+```bash
+modelinfo mistralai/Mistral-7B-v0.1 --vllm --gpu 4xRTX4090 --topology pcie4 --strategy tp
+```
+
 ### Example Output (Single Model)
 
 ```text
@@ -141,13 +147,18 @@ Qwen2.5-0.5B       494.0M    BF16     8K         1.6 GB      ✓
 | `--gpu` | `--gpu rtx4090` | Check if the model fits. Accepts GPU names (`rtx4090`, `b200`, `rx7900xtx`), explicit VRAM limits in GB (`--gpu 24`), or local hardware auto-discovery (`--gpu auto`). |
 | `--context` | `--context 32768` | Adjust the target KV cache length. Essential for calculating the dynamic memory footprint of long-context models. Defaults to `8192`. |
 | `--max-vram` | `--max-vram 80` | Adjusts the color-coded heat mapping thresholds (Green/Yellow/Red) in the terminal output to match a specific hardware ceiling. |
+| `--vllm` | `--vllm --gpu auto` | Switches from additive memory checking to a subtractive serving capacity estimation. Shows exactly how many tokens fit in the PagedAttention pool. |
+| `--gpu-util` | `--gpu-util 0.9` | Sets the vLLM `gpu_memory_utilization` ratio. Defaults to `0.9` (reserves 10% for PyTorch context). |
+| `--topology` | `--topology nvlink` | Set interconnect topology to calculate exact communication overhead penalties (`nvlink`, `pcie4`, `pcie3`). Defaults to `pcie4`. |
+| `--strategy` | `--strategy tp` | Selects the parallelization strategy for multi-GPU setups (`tp` for Tensor Parallelism, `pp` for Pipeline Parallelism). Defaults to `tp`. |
+| `--tensors` | `--tensors` | Bypasses the algorithmic speed estimation and forces the tool to fetch all remote shards, displaying an exact size breakdown of every tensor. |
 
 ## Architecture
 
-The system operates across three modules:
+Three modules:
 
 1. **Presentation (`cli.py`, `ui.py`)**: Parses arguments and formats tables via `rich`.
-2. **Parsing Engine (`parsers/`)**: Specialized binary readers (`safetensors.py`, `gguf.py`, `pytorch.py`) strictly confined to standard library operations.
+2. **Parsing Engine (`parsers/`)**: Specialized binary readers (`safetensors.py`, `gguf.py`, `pytorch.py`) that use only the standard library.
 3. **Math Engine (`calculator.py`)**: Determines total parameter counts, maps data types to byte coefficients, and calculates dynamic memory allocations based on tensor shape heuristics.
 
 ## License
