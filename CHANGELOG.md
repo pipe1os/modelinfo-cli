@@ -8,14 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [1.4.0] - 2026-06-07
 
-This release adds multi-GPU hardware topology modeling and a subtractive vLLM memory engine for inference planning. We also overhauled how remote Hub interactions work to speed up metadata fetching.
+This release adds multi-GPU hardware topology modeling and a vLLM serving capacity engine for inference planning. We also overhauled how remote Hub interactions work to speed up metadata fetching.
 
 ### Added
-- Added the `--vllm` flag to switch from additive VRAM checks to subtractive "Serving Capacity" estimates. It calculates PagedAttention block limits based on a configurable `--gpu-util` ratio.
+- Added the `--vllm` flag to switch from additive VRAM checks to a "Serving Capacity" simulation. It calculates PagedAttention block limits based on a configurable `--gpu-util` ratio.
 - **Topology-Aware Overhead Scaling:** Added `--topology` (`nvlink`, `pcie4`, `pcie3`) and `--strategy` (`tp`, `pp`) flags. The calculator now applies NCCL communication penalties directly to weights and activations instead of using a generic fixed multiplier.
 - Mapped explicit `ggml_type` enums (0-33) for GGUF files to fix VRAM under-reporting for specific quantization types.
 - The CLI now does algorithmic estimation via `index.json` by default. If you need the exact size breakdown of every tensor, pass `--tensors` to force it to fetch all remote shards.
-- Added comprehensive `pytest` test coverage for the new vLLM subtractive math engine, topology penalties, and explicit GGUF byte mappings.
+- Added comprehensive `pytest` test coverage for the new vLLM serving capacity engine, topology penalties, and explicit GGUF byte mappings.
 
 ### Changed
 - Removed KV cache from the distributed overhead multiplier because Tensor Parallelism partitions context blocks rather than duplicating them.

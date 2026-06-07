@@ -8,14 +8,14 @@
 
 ModelInfo is a CLI tool that inspects machine learning model checkpoints (`.safetensors`, `.gguf`, `.pt`) and calculates hardware requirements completely offline.
 
-It reads binary headers directly using the Python standard library. By bypassing full tensor payload loading and strictly excluding heavy ecosystems like PyTorch or HuggingFace, the tool executes in under 100 milliseconds.
+It reads binary headers directly using the Python standard library. It skips the full tensor payload entirely (no PyTorch, no HuggingFace) and parses in under 100ms.
 
 ## Features
 
 - **Zero-Dependency Parsing**: Reads `.safetensors` 8-byte JSON prefixes and `.gguf` binary key-value metadata directly via `struct` and `json` (falling back to `config.json` if needed).
 - **Remote Hugging Face Hub Inspection**: Pass a repo ID (e.g., `meta-llama/Llama-2-7b-hf`) and it uses concurrent byte-range requests to read the headers off the CDN in under 2 seconds. No need to download the checkpoint.
 - Parses `model.safetensors.index.json` to support sharded models without crashing on partial downloads.
-- **Dynamic VRAM & Subtractive vLLM Math**: Calculates exact VRAM limits based on the model's architecture and your target context length. If you use the `--vllm` flag, it switches to a subtractive "Serving Capacity" engine that calculates exactly how many tokens fit in the PagedAttention pool based on your `--gpu-util` ratio.
+- **Dynamic VRAM & vLLM Capacity Planning**: Calculates exact VRAM limits based on the model's architecture and your target context length. If you use the `--vllm` flag, it switches to a "Serving Capacity" simulation that calculates exactly how many tokens fit in the PagedAttention pool based on your `--gpu-util` ratio.
 - **Hardware Fit Diagnostics**: Check if a model fits your cluster with `--gpu` (e.g. `--gpu RTX4090` or `--gpu auto`). It enforces Apple Silicon's 75% unified memory wire limit, and you can explicitly model multi-GPU NCCL communication penalties with `--topology` and `--strategy`.
 - **Side-by-Side Comparison**: Pass multiple models to trigger a comparison table (parameters, data types, context lengths, VRAM footprints).
 - Uses exact `ggml_type` mappings for GGUF formats to calculate byte-scaling coefficients, preventing VRAM under-reporting.
@@ -48,7 +48,7 @@ pip install -e ".[dev]"
 
 ## Testing
 
-The testing suite enforces cross-platform structural integrity and guards the zero-dependency latency constraint. Tests are isolated against custom binary mocks in `tests/fixtures/`.
+Tests cover the binary parsers and verify the sub-100ms local parse constraint using binary mocks in `tests/fixtures/`.
 
 Run the test suite using pytest:
 
@@ -147,7 +147,7 @@ Qwen2.5-0.5B       494.0M    BF16     8K         1.6 GB      ✓
 | `--gpu` | `--gpu rtx4090` | Check if the model fits. Accepts GPU names (`rtx4090`, `b200`, `rx7900xtx`), explicit VRAM limits in GB (`--gpu 24`), or local hardware auto-discovery (`--gpu auto`). |
 | `--context` | `--context 32768` | Adjust the target KV cache length. Essential for calculating the dynamic memory footprint of long-context models. Defaults to `8192`. |
 | `--max-vram` | `--max-vram 80` | Adjusts the color-coded heat mapping thresholds (Green/Yellow/Red) in the terminal output to match a specific hardware ceiling. |
-| `--vllm` | `--vllm --gpu auto` | Switches from additive memory checking to a subtractive serving capacity estimation. Shows exactly how many tokens fit in the PagedAttention pool. |
+| `--vllm` | `--vllm --gpu auto` | Switches from additive memory checking to a serving capacity simulation. Shows exactly how many tokens fit in the PagedAttention pool. |
 | `--gpu-util` | `--gpu-util 0.9` | Sets the vLLM `gpu_memory_utilization` ratio. Defaults to `0.9` (reserves 10% for PyTorch context). |
 | `--topology` | `--topology nvlink` | Set interconnect topology to calculate exact communication overhead penalties (`nvlink`, `pcie4`, `pcie3`). Defaults to `pcie4`. |
 | `--strategy` | `--strategy tp` | Selects the parallelization strategy for multi-GPU setups (`tp` for Tensor Parallelism, `pp` for Pipeline Parallelism). Defaults to `tp`. |

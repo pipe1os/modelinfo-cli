@@ -143,8 +143,8 @@ def test_strategy_pp():
     assert fp_pp["penalty_percentage"] == 0.0
     assert fp_pp["overhead_bytes"] == (4 * 600 * 1024 * 1024)
 
-def test_vllm_subtractive_math():
-    """Verify the subtractive vLLM serving capacity engine calculates exact tokens."""
+def test_vllm_capacity_simulation():
+    """Verify the vLLM serving capacity engine calculates exact tokens."""
     tensors = {
         "model.layers.0.attn.weight": {"shape": [1024, 1024], "dtype": "F16"} # Base: 2MB
     }

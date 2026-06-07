@@ -64,7 +64,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--vllm",
         action="store_true",
-        help="Enable Subtractive Math Engine: Calculate max context tokens using vLLM PagedAttention allocation.",
+        help="Enable vLLM Capacity Simulation: Calculate max context tokens using PagedAttention allocation.",
     )
     parser.add_argument(
         "--gpu-util",
@@ -185,7 +185,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if len(args.file) > 1:
         if args.vllm:
-            console.print("[red]Error: Side-by-side comparison does not currently support the subtractive --vllm engine. Compare models sequentially or remove --vllm.[/red]")
+            console.print("[red]Error: Side-by-side comparison does not currently support the --vllm capacity simulation. Compare models sequentially or remove --vllm.[/red]")
             return 1
             
         models = []

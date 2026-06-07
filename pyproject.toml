@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "modelinfo-cli"
 version = "1.4.0"
-description = "A sub-100ms, zero-dependency CLI to inspect ML models (.safetensors, .gguf) locally or via Hugging Face, calculate exact VRAM footprints, and determine hardware fit."
+description = "A CLI tool to inspect ML checkpoints (.safetensors, .gguf, .pt) and calculate inference VRAM, multi-GPU memory splits, and vLLM serving capacity."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
