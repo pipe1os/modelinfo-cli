@@ -136,6 +136,9 @@ def print_model_info(
             summary.add_row("Hardware Fit:", "[red]✗ No (OOM before serving any tokens)[/red]")
         else:
             summary.add_row("Hardware Fit:", "[green]✓ Yes[/green]")
+            
+        if gpu_count > 1:
+            summary.add_row("", "[dim]*Note: Max capacity assumes perfect load balancing. Real capacity is bottlenecked by the most memory-constrained GPU in the array.[/dim]")
     else:
         summary.add_row("VRAM (est):", vram_display)
         if gpu_name:
