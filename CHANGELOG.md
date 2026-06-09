@@ -6,6 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
  
+## [1.4.2] - 2026-06-08
+
+### Fixed
+- Fixed unused imports (`os`, `json`) in architecture parsing logic.
+- Fixed a bug where the `--max-vram` argument was ignored when evaluating single models without a target GPU.
+- Fixed a bug where the target GPU's memory limit was ignored in favor of the default max VRAM when rendering the multi-model comparison table.
+- Prevented a potential `ValueError` crash in the remote fetcher by enforcing a minimum of 1 worker for the `ThreadPoolExecutor`.
+
 ## [1.4.1] - 2026-06-07
 
 ### Changed

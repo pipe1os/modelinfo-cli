@@ -126,7 +126,7 @@ def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False) -> Tuple[D
             def fetch_shard(shard: str):
                 return shard, _fetch_safetensors_header(repo_id, shard)
                 
-            with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(unique_shards))) as executor:
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(8, len(unique_shards)))) as executor:
                 future_to_shard = {executor.submit(fetch_shard, shard): shard for shard in unique_shards}
                 for future in concurrent.futures.as_completed(future_to_shard):
                     shard, shard_header = future.result()
