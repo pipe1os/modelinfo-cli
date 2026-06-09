@@ -207,7 +207,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 console.print(f"[red]Error analyzing model '{model_path}': {e}[/red]")
                 return 1
             
-        print_compare_info(models, args.max_vram, gpu_name=gpu_name_display)
+        print_compare_info(models, gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
         return 0
         
     file_path = args.file[0]
@@ -228,7 +228,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         console.print(f"[red]Error: {e}[/red]")
         return 1
 
-    print_model_info(**info, max_vram_gb=gpu_vram_gb if gpu_vram_gb else 8.0, gpu_name=gpu_name_display)
+    print_model_info(**info, max_vram_gb=gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
     return 0
 
 
