@@ -31,6 +31,7 @@ KNOWN_GPUS = {
     "rtx3060ti": 8.0,
     "rtx306012gb": 12.0,
     "rtx3060": 8.0,
+    "rtx3050ti": 4.0,
     "rtx3050": 8.0,
     "rtx2080ti": 11.0,
     "rtx2080super": 8.0,
@@ -45,6 +46,11 @@ KNOWN_GPUS = {
     "gtx1070ti": 8.0,
     "gtx1070": 8.0,
     "gtx1060": 6.0,
+    "gtx1660ti": 6.0,
+    "gtx1660super": 6.0,
+    "gtx1660": 6.0,
+    "gtx1650super": 4.0,
+    "gtx1650": 4.0,
     "titanrtx": 24.0,
     "titanv": 12.0,
     "titanxp": 12.0,
@@ -106,6 +112,8 @@ KNOWN_GPUS = {
     "rx6650xt": 8.0,
     "rx6600xt": 8.0,
     "rx6600": 8.0,
+    "rx580": 8.0,
+    "rx570": 4.0,
 
     # --- AMD Data Center / Pro ---
     "mi300x": 192.0,
@@ -126,6 +134,7 @@ KNOWN_GPUS = {
     "a750": 8.0,
     "gaudi3": 128.0,
     "gaudi2": 96.0,
+    "rtx4050": 6.0,
 }
 
 def normalize_gpu_string(name: str) -> str:
@@ -156,76 +165,4 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             
             gpu_count = len(lines)
             first_name = lines[0].split(',')[0].strip()
-            display_name = f"Multi-GPU: {gpu_count}x {first_name}" if gpu_count > 1 else first_name
-            return display_name, total_mb / 1024.0, gpu_count
-    except Exception:
-        pass
-        
-    # 2. AMD (ROCm)
-    try:
-        result = subprocess.run(
-            ["rocm-smi", "--showmeminfo", "vram"],
-            capture_output=True, text=True, check=True
-        )
-        lines = [line for line in result.stdout.strip().split('\n') if "Total Memory (B):" in line]
-        if lines:
-            total_bytes = 0
-            gpu_count = len(lines)
-            for line in lines:
-                parts = line.split(':')
-                if len(parts) >= 2:
-                    total_bytes += int(parts[1].strip())
-            display_name = f"AMD Multi-GPU ({gpu_count}x)" if gpu_count > 1 else "AMD GPU"
-            return display_name, total_bytes / (1024.0**3), gpu_count
-    except Exception:
-        pass
-        
-    # 3. Apple Silicon
-    try:
-        result = subprocess.run(
-            ["sysctl", "hw.memsize"],
-            capture_output=True, text=True, check=True
-        )
-        total_bytes = int(result.stdout.strip().split()[1])
-        # Apply 75% operational heuristic for Apple Silicon wire limits
-        vram_gb = (total_bytes / (1024.0**3)) * 0.75
-        return "Apple Silicon (Unified Memory)", vram_gb, 1
-    except Exception:
-        pass
-        
-    return "Unknown", 8.0, 1
-
-def resolve_gpu(target: str) -> Tuple[str, float, int]:
-    if target.lower() == "auto":
-        return detect_local_gpu()
-        
-    # Apple Silicon routing trap
-    lower_target = target.lower()
-    if lower_target in ["m1", "m2", "m3", "m4", "apple", "mac"] or re.match(r'^m[1-4](-?(pro|max|ultra))?$', lower_target):
-        raise ValueError("Apple Silicon VRAM varies by machine configuration. Please use '--gpu auto' to calculate your specific Unified Memory limits.")
-        
-    # Parse potential multi-GPU format e.g., "2x RTX4090"
-    gpu_count = 1
-    match = re.match(r'^(\d+)x\s*(.+)$', lower_target)
-    if match:
-        gpu_count = int(match.group(1))
-        target_name = match.group(2)
-    else:
-        target_name = target
-        
-    normalized = normalize_gpu_string(target_name)
-    
-    if normalized in KNOWN_GPUS:
-        vram_gb = KNOWN_GPUS[normalized] * gpu_count
-        display_name = f"{gpu_count}x {target_name}" if gpu_count > 1 else target_name
-        return display_name, vram_gb, gpu_count
-        
-    # If the user passed a pure number, assume GB
-    try:
-        vram_gb = float(normalized) * gpu_count
-        display_name = f"Custom ({vram_gb} GB)"
-        return display_name, vram_gb, gpu_count
-    except ValueError:
-        pass
-        
-    raise ValueError(f"Unknown GPU target '{target}'. Use '--gpu auto' to detect automatically, or provide a known name (e.g., 'RTX4090') or a numeric GB value.")
+            display_name = f"Multi-GPU: {gpu_count}x {first_name}" 
