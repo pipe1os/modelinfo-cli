@@ -2,14 +2,6 @@ import re
 import subprocess
 from typing import Tuple
 
-
-gtx1660super: 6.0
-
-
-
-rx580: 8.0
-rx570: 4.0
-
 KNOWN_GPUS = {
     # --- NVIDIA Consumer (RTX 50/40/30/20/10 Series & Titans) ---
     "rtx5090": 32.0,
@@ -50,6 +42,7 @@ KNOWN_GPUS = {
     "rtx2060super": 8.0,
     "rtx206012gb": 12.0,
     "rtx2060": 6.0,
+    "gtx1660super": 6.0,
     "gtx1660ti" : 6.0,
     "gtx1660": 6.0,
     "gtx1650super": 4.0,
@@ -120,6 +113,9 @@ KNOWN_GPUS = {
     "rx6650xt": 8.0,
     "rx6600xt": 8.0,
     "rx6600": 8.0,
+    "rx580": 8.0,
+    "rx570": 4.0,
+
 
     # --- AMD Data Center / Pro ---
     "mi300x": 192.0,
