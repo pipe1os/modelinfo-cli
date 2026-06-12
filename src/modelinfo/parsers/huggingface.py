@@ -29,7 +29,7 @@ def _get_hf_token() -> str | None:
             
     return None
 
-def _make_request(url: str, headers: Dict[str, str] = None) -> bytes:
+def _make_request(url: str, headers: Dict[str, str] = None, limit: int | None = None) -> bytes:
     if headers is None:
         headers = {}
         
@@ -40,6 +40,8 @@ def _make_request(url: str, headers: Dict[str, str] = None) -> bytes:
     req = urllib.request.Request(url, headers=headers)
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
+            if limit is not None:
+                return response.read(limit)
             return response.read()
     except urllib.error.HTTPError as e:
         if e.code == 401:
@@ -54,10 +56,10 @@ def _fetch_safetensors_header(repo_id: str, filename: str) -> Dict[str, Any]:
     # 1. Fetch the first 500KB in a single roundtrip
     headers = {"Range": "bytes=0-500000"}
     try:
-        chunk = _make_request(url, headers=headers)
+        chunk = _make_request(url, headers=headers, limit=500000)
     except urllib.error.HTTPError as e:
         if e.code == 416: # Range Not Satisfiable (file is smaller than 500KB)
-            chunk = _make_request(url)
+            chunk = _make_request(url, limit=500000)
         else:
             raise
             
@@ -72,7 +74,7 @@ def _fetch_safetensors_header(repo_id: str, filename: str) -> Dict[str, Any]:
     else:
         # 3. Double-roundtrip only if the header is massive (>500KB)
         headers = {"Range": f"bytes=8-{8+header_size-1}"}
-        json_bytes = _make_request(url, headers=headers)
+        json_bytes = _make_request(url, headers=headers, limit=header_size)
         
     return json.loads(json_bytes)
 
