@@ -114,6 +114,8 @@ def analyze_model(
     elif file_path_lower.endswith(".pt") or file_path_lower.endswith(".bin"):
         tensors = parse_pytorch_header(file_path)
         format_name = "PyTorch"
+    elif os.path.isdir(file_path):
+        raise IsADirectoryError(f"'{file_path}' is a directory. Please provide the path to a specific weights file (e.g. .safetensors, .gguf, .pt) inside the directory.")
     else:
         raise ValueError(f"File '{file_path}' not found locally and does not appear to be a Hugging Face repository ID.")
         
