@@ -190,43 +190,35 @@ def main(argv: Sequence[str] | None = None) -> int:
             
         models = []
         for model_path in args.file:
-            try:
-                info = analyze_model(
-                    model_path, 
-                    args.context, 
-                    gpu_count, 
-                    fetch_tensors=args.tensors,
-                    topology=args.topology,
-                    strategy=args.strategy,
-                    is_vllm=args.vllm,
-                    gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
-                    gpu_util=args.gpu_util
-                )
-                models.append((model_path.split("/")[-1], info))
-            except Exception as e:
-                console.print(f"[red]Error analyzing model '{model_path}': {e}[/red]")
-                return 1
+            info = analyze_model(
+                model_path, 
+                args.context, 
+                gpu_count, 
+                fetch_tensors=args.tensors,
+                topology=args.topology,
+                strategy=args.strategy,
+                is_vllm=args.vllm,
+                gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
+                gpu_util=args.gpu_util
+            )
+            models.append((model_path.split("/")[-1], info))
             
         print_compare_info(models, gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
         return 0
         
     file_path = args.file[0]
     
-    try:
-        info = analyze_model(
-            file_path, 
-            args.context, 
-            gpu_count, 
-            fetch_tensors=args.tensors,
-            topology=args.topology,
-            strategy=args.strategy,
-            is_vllm=args.vllm,
-            gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
-            gpu_util=args.gpu_util
-        )
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
-        return 1
+    info = analyze_model(
+        file_path, 
+        args.context, 
+        gpu_count, 
+        fetch_tensors=args.tensors,
+        topology=args.topology,
+        strategy=args.strategy,
+        is_vllm=args.vllm,
+        gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
+        gpu_util=args.gpu_util
+    )
 
     print_model_info(**info, max_vram_gb=gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
     return 0
