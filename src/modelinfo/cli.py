@@ -2,14 +2,23 @@ import argparse
 import json
 import os
 import sys
+from importlib.metadata import PackageNotFoundError, version
 from typing import Sequence
 
+from modelinfo import __version__
 from modelinfo.architecture import identify_architecture_name
 from modelinfo.calculator import calculate_footprint
 from modelinfo.parsers.gguf import parse_gguf_header
 from modelinfo.parsers.pytorch import parse_pytorch_header
 from modelinfo.parsers.safetensors import parse_safetensors_header
 from modelinfo.ui import console, print_model_info, print_compare_info
+
+
+def package_version() -> str:
+    try:
+        return version("modelinfo-cli")
+    except PackageNotFoundError:
+        return __version__
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -71,6 +80,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=float,
         default=0.9,
         help="vLLM gpu_memory_utilization ratio (default 0.9). Reserves 10 percent for PyTorch context.",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action="version",
+        version=f"%(prog)s {package_version()}",
     )
 
     return parser.parse_args(argv)
