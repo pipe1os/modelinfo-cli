@@ -43,9 +43,9 @@ def _make_request(url: str, headers: Dict[str, str] = None) -> bytes:
             return response.read()
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            raise PermissionError(f"Gated Model or Invalid Token: Please set HF_TOKEN environment variable to access {url}")
+            raise PermissionError(f"Gated/Private Model or Invalid Token (401 Unauthorized). Set the HF_TOKEN environment variable to access {url}")
         if e.code == 404:
-            raise FileNotFoundError(f"File not found on Hugging Face Hub: {url}")
+           raise FileNotFoundError(f"Could not find repository or file on Hugging Face (404 Not Found): {url}")
         raise
 
 def _fetch_safetensors_header(repo_id: str, filename: str) -> Dict[str, Any]:
@@ -86,7 +86,9 @@ def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False) -> Tuple[D
         api_data = json.loads(_make_request(api_url).decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            raise PermissionError(f"Gated Model: Please set HF_TOKEN environment variable to access {repo_id}")
+            raise PermissionError(f"Gated/Private Model (401 Unauthorized). Set the HF_TOKEN environment variable to access {repo_id}")
+        if e.code == 404:
+             raise FileNotFoundError(f"Could not find repository on Hugging Face (404 Not Found): {repo_id}")
         raise
         
     siblings = api_data.get("siblings", [])
