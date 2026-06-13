@@ -30,7 +30,8 @@ class VersionAction(argparse.Action):
         except PackageNotFoundError:
             ver = __version__
 
-        parser.exit(message=f"{parser.prog} {ver}\n")
+        print(f"{parser.prog} {ver}")
+        parser.exit()
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
