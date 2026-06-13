@@ -3,13 +3,35 @@ import json
 import os
 import sys
 from typing import Sequence
-
 from modelinfo.architecture import identify_architecture_name
 from modelinfo.calculator import calculate_footprint
 from modelinfo.parsers.gguf import parse_gguf_header
 from modelinfo.parsers.pytorch import parse_pytorch_header
 from modelinfo.parsers.safetensors import parse_safetensors_header
 from modelinfo.ui import console, print_model_info, print_compare_info
+
+
+class VersionAction(argparse.Action):
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help="show program's version number and exit"):
+        super().__init__(
+            option_strings=option_strings,
+            dest=dest,
+            default=default,
+            nargs=0,
+            help=help,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        from importlib.metadata import PackageNotFoundError, version
+        from modelinfo import __version__
+
+        try:
+            ver = version("modelinfo-cli")
+        except PackageNotFoundError:
+            ver = __version__
+
+        print(f"{parser.prog} {ver}")
+        parser.exit()
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -71,6 +93,11 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=float,
         default=0.9,
         help="vLLM gpu_memory_utilization ratio (default 0.9). Reserves 10 percent for PyTorch context.",
+    )
+    parser.add_argument(
+        "-v",
+        "--version",
+        action=VersionAction,
     )
 
     return parser.parse_args(argv)
