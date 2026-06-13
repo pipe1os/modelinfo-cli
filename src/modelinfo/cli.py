@@ -2,10 +2,7 @@ import argparse
 import json
 import os
 import sys
-from importlib.metadata import PackageNotFoundError, version
 from typing import Sequence
-
-from modelinfo import __version__
 from modelinfo.architecture import identify_architecture_name
 from modelinfo.calculator import calculate_footprint
 from modelinfo.parsers.gguf import parse_gguf_header
@@ -14,11 +11,26 @@ from modelinfo.parsers.safetensors import parse_safetensors_header
 from modelinfo.ui import console, print_model_info, print_compare_info
 
 
-def package_version() -> str:
-    try:
-        return version("modelinfo-cli")
-    except PackageNotFoundError:
-        return __version__
+class VersionAction(argparse.Action):
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help="show program's version number and exit"):
+        super().__init__(
+            option_strings=option_strings,
+            dest=dest,
+            default=default,
+            nargs=0,
+            help=help,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        from importlib.metadata import PackageNotFoundError, version
+        from modelinfo import __version__
+
+        try:
+            ver = version("modelinfo-cli")
+        except PackageNotFoundError:
+            ver = __version__
+
+        parser.exit(message=f"{parser.prog} {ver}\n")
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -84,8 +96,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "-v",
         "--version",
-        action="version",
-        version=f"%(prog)s {package_version()}",
+        action=VersionAction,
     )
 
     return parser.parse_args(argv)
