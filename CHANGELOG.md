@@ -6,6 +6,19 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
  
+## [1.4.3] - 2026-06-13
+
+### Added
+- Added the `-v`/`--version` flag to quickly check the installed modelinfo version. The version lookup is lazily evaluated to guarantee sub-100ms CLI startup times.
+- Added missing entry-level GPUs to the `KNOWN_GPUS` hardware discovery dictionary.
+- Added repository documentation including `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, and GitHub issue/PR templates.
+
+### Fixed
+- Fixed an Out-Of-Memory (OOM) vulnerability during remote inspection by capping the HTTP response read. This protects the CLI from upstream CDN proxies that ignore HTTP `Range` headers.
+- Fixed confusing stack traces when a local directory is passed instead of a file by raising an explicit `IsADirectoryError`.
+- Fixed the CLI to print user-friendly error messages when attempting to inspect gated or non-existent Hugging Face repositories (401 Unauthorized / 404 Not Found).
+- Fixed an issue where the main entry point swallowed exceptions too broadly, obscuring critical stack traces during unexpected failures.
+
 ## [1.4.2] - 2026-06-08
 
 ### Fixed
