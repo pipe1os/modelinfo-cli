@@ -1,0 +1,20 @@
+language: "en-US"
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+chat:
+  auto_reply: true
+instructions: >
+  You are reviewing code for the `modelinfo-cli` project. 
+  
+  Please strictly enforce the following architectural constraints when reviewing:
+  
+  1. Zero-Dependency Parsing: The project must parse binary headers (.safetensors, .gguf) directly using the Python standard library (os, struct, json, zipfile).
+  2. No Heavy Imports: Imports such as `torch`, `transformers`, `numpy`, `safetensors`, and `huggingface_hub` are completely banned from the project.
+  3. Fast Startup Time: The CLI must execute in under 100ms. Any module that takes time to load must be lazy-imported inside the specific function where it is used.
+  4. Sandboxed Pickling: For PyTorch (.pt) files, `pickle.load()` must not be used without a custom restricted `pickle.Unpickler` that blocks arbitrary code execution.
+  5. Flat Memory Profile: Actual tensor weight matrices must never be loaded into memory. Code must only read the metadata headers and stop.
