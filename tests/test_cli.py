@@ -25,6 +25,20 @@ def test_batch_size_flag_accepts_integer():
     assert args.batch_size == 4
 
 
+def test_batch_size_flag_rejects_zero():
+    with pytest.raises(SystemExit) as exc_info:
+        parse_args(["--batch-size", "0", "model.gguf"])
+
+    assert exc_info.value.code == 2
+
+
+def test_batch_size_flag_rejects_negative():
+    with pytest.raises(SystemExit) as exc_info:
+        parse_args(["--batch-size", "-1", "model.gguf"])
+
+    assert exc_info.value.code == 2
+
+
 def test_analyze_model_passes_batch_size_to_footprint(monkeypatch, tmp_path):
     model_path = tmp_path / "model.gguf"
     model_path.write_bytes(b"mock")

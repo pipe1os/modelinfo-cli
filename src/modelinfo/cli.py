@@ -34,6 +34,13 @@ class VersionAction(argparse.Action):
         parser.exit()
 
 
+def _positive_int(value: str) -> int:
+    ivalue = int(value)
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError("batch size must be at least 1")
+    return ivalue
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="modelinfo",
@@ -54,7 +61,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--batch-size",
-        type=int,
+        type=_positive_int,
         default=1,
         help="Batch size for dynamic KV cache footprint calculation.",
     )
