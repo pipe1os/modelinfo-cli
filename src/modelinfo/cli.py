@@ -53,6 +53,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Context length for dynamic KV cache footprint calculation.",
     )
     parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=1,
+        help="Batch size for dynamic KV cache footprint calculation.",
+    )
+    parser.add_argument(
         "--max-vram",
         type=float,
         default=8.0,
@@ -106,7 +112,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def analyze_model(
     file_path: str, 
     context_override: int | None, 
-    gpu_count: int = 1, 
+    gpu_count: int = 1,
+    batch_size: int = 1,
     fetch_tensors: bool = False,
     topology: str = "pcie4",
     strategy: str = "tp",
@@ -164,6 +171,7 @@ def analyze_model(
     footprint = calculate_footprint(
         tensors, 
         context_length=context_length,
+        batch_size=batch_size,
         config=config,
         gpu_count=gpu_count,
         topology=topology,
@@ -222,7 +230,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             info = analyze_model(
                 model_path, 
                 args.context, 
-                gpu_count, 
+                gpu_count=gpu_count,
+                batch_size=args.batch_size,
                 fetch_tensors=args.tensors,
                 topology=args.topology,
                 strategy=args.strategy,
@@ -240,7 +249,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     info = analyze_model(
         file_path, 
         args.context, 
-        gpu_count, 
+        gpu_count=gpu_count,
+        batch_size=args.batch_size,
         fetch_tensors=args.tensors,
         topology=args.topology,
         strategy=args.strategy,
