@@ -34,6 +34,13 @@ class VersionAction(argparse.Action):
         parser.exit()
 
 
+def _positive_int(value: str) -> int:
+    ivalue = int(value)
+    if ivalue < 1:
+        raise argparse.ArgumentTypeError("batch size must be at least 1")
+    return ivalue
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="modelinfo",
@@ -51,6 +58,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         type=int,
         default=None,
         help="Context length for dynamic KV cache footprint calculation.",
+    )
+    parser.add_argument(
+        "--batch-size",
+        type=_positive_int,
+        default=1,
+        help="Batch size for dynamic KV cache footprint calculation.",
     )
     parser.add_argument(
         "--max-vram",
@@ -106,7 +119,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 def analyze_model(
     file_path: str, 
     context_override: int | None, 
-    gpu_count: int = 1, 
+    gpu_count: int = 1,
+    batch_size: int = 1,
     fetch_tensors: bool = False,
     topology: str = "pcie4",
     strategy: str = "tp",
@@ -164,6 +178,7 @@ def analyze_model(
     footprint = calculate_footprint(
         tensors, 
         context_length=context_length,
+        batch_size=batch_size,
         config=config,
         gpu_count=gpu_count,
         topology=topology,
@@ -222,7 +237,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             info = analyze_model(
                 model_path, 
                 args.context, 
-                gpu_count, 
+                gpu_count=gpu_count,
+                batch_size=args.batch_size,
                 fetch_tensors=args.tensors,
                 topology=args.topology,
                 strategy=args.strategy,
@@ -240,7 +256,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     info = analyze_model(
         file_path, 
         args.context, 
-        gpu_count, 
+        gpu_count=gpu_count,
+        batch_size=args.batch_size,
         fetch_tensors=args.tensors,
         topology=args.topology,
         strategy=args.strategy,
