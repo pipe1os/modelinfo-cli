@@ -3,17 +3,23 @@ import json
 import os
 import struct
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, Tuple
 
 def _get_hf_endpoint() -> str:
-    endpoint = os.environ.get("HF_ENDPOINT", "https://huggingface.co")
+    endpoint = os.environ.get("HF_ENDPOINT", "https://huggingface.co").strip()
     if not endpoint:
         raise ValueError("HF_ENDPOINT is set but empty; expected a valid HTTP(S) URL")
     endpoint = endpoint.rstrip("/")
     if not endpoint.startswith(("http://", "https://")):
         raise ValueError(
             f"HF_ENDPOINT must use http:// or https:// scheme, got: {endpoint}"
+        )
+    parsed = urllib.parse.urlparse(endpoint)
+    if not parsed.netloc:
+        raise ValueError(
+            f"HF_ENDPOINT must include a valid hostname, got: {endpoint}"
         )
     return endpoint
 
