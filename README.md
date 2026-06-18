@@ -146,12 +146,14 @@ Qwen2.5-0.5B       494.0M    BF16     8K         1.6 GB      ✓
 | `[files...]` | `modelinfo modelA modelB` | Pass multiple files/repos to automatically render a side-by-side comparison table instead of a deep-dive summary. |
 | `--gpu` | `--gpu rtx4090` | Check if the model fits. Accepts GPU names (`rtx4090`, `b200`, `rx7900xtx`), explicit VRAM limits in GB (`--gpu 24`), or local hardware auto-discovery (`--gpu auto`). |
 | `--context` | `--context 32768` | Adjust the target KV cache length. Essential for calculating the dynamic memory footprint of long-context models. Defaults to `8192`. |
+| `--batch-size` | `--batch-size 32` | Batch size for dynamic KV cache footprint calculation. Defaults to `1`. |
 | `--max-vram` | `--max-vram 80` | Adjusts the color-coded heat mapping thresholds (Green/Yellow/Red) in the terminal output to match a specific hardware ceiling. |
 | `--vllm` | `--vllm --gpu auto` | Switches from additive memory checking to a serving capacity simulation. Shows exactly how many tokens fit in the PagedAttention pool. |
 | `--gpu-util` | `--gpu-util 0.9` | Sets the vLLM `gpu_memory_utilization` ratio. Defaults to `0.9` (reserves 10% for PyTorch context). |
 | `--topology` | `--topology nvlink` | Set interconnect topology to calculate exact communication overhead penalties (`nvlink`, `pcie4`, `pcie3`). Defaults to `pcie4`. |
 | `--strategy` | `--strategy tp` | Selects the parallelization strategy for multi-GPU setups (`tp` for Tensor Parallelism, `pp` for Pipeline Parallelism). Defaults to `tp`. |
 | `--tensors` | `--tensors` | Bypasses the algorithmic speed estimation and forces the tool to fetch all remote shards, displaying an exact size breakdown of every tensor. |
+| `-v, --version` | `modelinfo -v` | Show program's version number and exit. |
 
 ## Architecture
 
