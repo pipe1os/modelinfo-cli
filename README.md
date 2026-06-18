@@ -153,6 +153,7 @@ Qwen2.5-0.5B       494.0M    BF16     8K         1.6 GB      ✓
 | `--topology` | `--topology nvlink` | Set interconnect topology to calculate exact communication overhead penalties (`nvlink`, `pcie4`, `pcie3`). Defaults to `pcie4`. |
 | `--strategy` | `--strategy tp` | Selects the parallelization strategy for multi-GPU setups (`tp` for Tensor Parallelism, `pp` for Pipeline Parallelism). Defaults to `tp`. |
 | `--tensors` | `--tensors` | Bypasses the algorithmic speed estimation and forces the tool to fetch all remote shards, displaying an exact size breakdown of every tensor. |
+| `--timeout` | `--timeout 30` | Network request timeout in seconds for Hugging Face Hub. Defaults to `10.0`. |
 | `-v, --version` | `modelinfo -v` | Show program's version number and exit. |
 
 ## Architecture
