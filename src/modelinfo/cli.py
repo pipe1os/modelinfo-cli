@@ -108,6 +108,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="vLLM gpu_memory_utilization ratio (default 0.9). Reserves 10 percent for PyTorch context.",
     )
     parser.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="Network request timeout in seconds for Hugging Face Hub (default 10.0).",
+    )
+    parser.add_argument(
         "-v",
         "--version",
         action=VersionAction,
@@ -117,8 +123,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
 
 
 def analyze_model(
-    file_path: str, 
-    context_override: int | None, 
+    file_path: str,
+    context_override: int | None,
     gpu_count: int = 1,
     batch_size: int = 1,
     fetch_tensors: bool = False,
@@ -126,7 +132,8 @@ def analyze_model(
     strategy: str = "tp",
     is_vllm: bool = False,
     gpu_vram_gb: float = 0.0,
-    gpu_util: float = 0.9
+    gpu_util: float = 0.9,
+    timeout: float = 10.0
 ) -> dict:
     tensors = {}
     config = None
@@ -136,7 +143,7 @@ def analyze_model(
     
     if not os.path.exists(file_path) and not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
         from modelinfo.parsers.huggingface import fetch_huggingface_repo
-        tensors, config, format_name, disk_size = fetch_huggingface_repo(file_path, fetch_tensors=fetch_tensors)
+        tensors, config, format_name, disk_size = fetch_huggingface_repo(file_path, fetch_tensors=fetch_tensors, timeout=timeout)
     elif file_path_lower.endswith(".safetensors") or file_path_lower.endswith(".index.json"):
         tensors = parse_safetensors_header(file_path)
         format_name = "SafeTensors"
@@ -235,8 +242,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         models = []
         for model_path in args.file:
             info = analyze_model(
-                model_path, 
-                args.context, 
+                model_path,
+                args.context,
                 gpu_count=gpu_count,
                 batch_size=args.batch_size,
                 fetch_tensors=args.tensors,
@@ -244,7 +251,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 strategy=args.strategy,
                 is_vllm=args.vllm,
                 gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
-                gpu_util=args.gpu_util
+                gpu_util=args.gpu_util,
+                timeout=args.timeout
             )
             models.append((model_path.split("/")[-1], info))
             
@@ -254,8 +262,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     file_path = args.file[0]
     
     info = analyze_model(
-        file_path, 
-        args.context, 
+        file_path,
+        args.context,
         gpu_count=gpu_count,
         batch_size=args.batch_size,
         fetch_tensors=args.tensors,
@@ -263,7 +271,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         strategy=args.strategy,
         is_vllm=args.vllm,
         gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
-        gpu_util=args.gpu_util
+        gpu_util=args.gpu_util,
+        timeout=args.timeout
     )
 
     print_model_info(**info, max_vram_gb=gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
