@@ -12,9 +12,9 @@ def _get_hf_endpoint() -> str:
     if not endpoint:
         raise ValueError("HF_ENDPOINT is set but empty; expected a valid HTTP(S) URL")
     endpoint = endpoint.rstrip("/")
-    if not endpoint.startswith(("http://", "https://")):
+    if not endpoint.startswith("https://"):
         raise ValueError(
-            f"HF_ENDPOINT must use http:// or https:// scheme, got: {endpoint}"
+            f"HF_ENDPOINT must use https:// scheme, got: {endpoint}"
         )
     parsed = urllib.parse.urlparse(endpoint)
     if not parsed.netloc:

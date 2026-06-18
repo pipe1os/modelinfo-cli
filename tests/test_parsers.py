@@ -45,3 +45,42 @@ def test_gguf_parser_metadata():
     # Verify the architecture bypass parses it to titlecase and prevents "Unknown Architecture"
     arch_name = identify_architecture_name(tensors, num_layers=1)
     assert arch_name == "Qwen2 (1 transformer layers)"
+
+
+# --- HF_ENDPOINT validation ---
+
+from modelinfo.parsers.huggingface import _get_hf_endpoint
+
+
+def test_hf_endpoint_valid_https(monkeypatch):
+    """Valid https:// endpoint is accepted."""
+    monkeypatch.setenv("HF_ENDPOINT", "https://huggingface.co")
+    assert _get_hf_endpoint() == "https://huggingface.co"
+
+
+def test_hf_endpoint_default_https(monkeypatch):
+    """Default endpoint when HF_ENDPOINT is not set."""
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    endpoint = _get_hf_endpoint()
+    assert endpoint == "https://huggingface.co"
+
+
+def test_hf_endpoint_rejects_http(monkeypatch):
+    """http:// scheme is rejected with ValueError."""
+    monkeypatch.setenv("HF_ENDPOINT", "http://localhost:8080")
+    with pytest.raises(ValueError, match="must use https:// scheme"):
+        _get_hf_endpoint()
+
+
+def test_hf_endpoint_rejects_empty(monkeypatch):
+    """Empty string is rejected with ValueError."""
+    monkeypatch.setenv("HF_ENDPOINT", "")
+    with pytest.raises(ValueError):
+        _get_hf_endpoint()
+
+
+def test_hf_endpoint_rejects_no_hostname(monkeypatch):
+    """URL without a hostname is rejected with ValueError."""
+    monkeypatch.setenv("HF_ENDPOINT", "https:///repo")
+    with pytest.raises(ValueError, match="must include a valid hostname"):
+        _get_hf_endpoint()
