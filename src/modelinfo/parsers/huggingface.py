@@ -7,7 +7,15 @@ import urllib.request
 from typing import Any, Dict, Tuple
 
 def _get_hf_endpoint() -> str:
-    return os.environ.get("HF_ENDPOINT", "https://huggingface.co").rstrip("/")
+    endpoint = os.environ.get("HF_ENDPOINT", "https://huggingface.co")
+    if not endpoint:
+        raise ValueError("HF_ENDPOINT is set but empty; expected a valid HTTP(S) URL")
+    endpoint = endpoint.rstrip("/")
+    if not endpoint.startswith(("http://", "https://")):
+        raise ValueError(
+            f"HF_ENDPOINT must use http:// or https:// scheme, got: {endpoint}"
+        )
+    return endpoint
 
 
 def _get_hf_token() -> str | None:
