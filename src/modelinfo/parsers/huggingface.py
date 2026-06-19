@@ -3,8 +3,26 @@ import json
 import os
 import struct
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any, Dict, Tuple
+
+
+def _get_hf_endpoint() -> str:
+    endpoint = os.environ.get("HF_ENDPOINT", "https://huggingface.co").strip()
+    if not endpoint:
+        raise ValueError("HF_ENDPOINT is set but empty; expected a valid HTTP(S) URL")
+    endpoint = endpoint.rstrip("/")
+    if not endpoint.startswith("https://"):
+        raise ValueError(
+            f"HF_ENDPOINT must use https:// scheme, got: {endpoint}"
+        )
+    parsed = urllib.parse.urlparse(endpoint)
+    if not parsed.netloc:
+        raise ValueError(
+            f"HF_ENDPOINT must include a valid hostname, got: {endpoint}"
+        )
+    return endpoint
 
 
 def _get_hf_token() -> str | None:
@@ -65,7 +83,7 @@ def _make_request(
 def _fetch_safetensors_header(
     repo_id: str, filename: str, timeout: float = 10.0
 ) -> Dict[str, Any]:
-    url = f"https://huggingface.co/{repo_id}/resolve/main/{filename}"
+    url = f"{_get_hf_endpoint()}/{repo_id}/resolve/main/{filename}"
 
     # 1. Fetch the first 500KB in a single roundtrip
     headers = {"Range": "bytes=0-500000"}
@@ -104,7 +122,7 @@ def fetch_huggingface_repo(
     Fetches the metadata directly from the Hugging Face Hub over the network.
     Returns: (tensors, config, format_name, disk_size)
     """
-    api_url = f"https://huggingface.co/api/models/{repo_id}"
+    api_url = f"{_get_hf_endpoint()}/api/models/{repo_id}"
     try:
         api_data = json.loads(_make_request(api_url, timeout=timeout).decode("utf-8"))
     except urllib.error.HTTPError as e:
@@ -123,7 +141,7 @@ def fetch_huggingface_repo(
 
     config = None
     if "config.json" in filenames:
-        config_url = f"https://huggingface.co/{repo_id}/resolve/main/config.json"
+        config_url = f"{_get_hf_endpoint()}/{repo_id}/resolve/main/config.json"
         config = json.loads(_make_request(config_url, timeout=timeout).decode("utf-8"))
 
     tensors = {}
@@ -131,7 +149,7 @@ def fetch_huggingface_repo(
 
     if "model.safetensors.index.json" in filenames:
         # Sharded SafeTensors
-        index_url = f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors.index.json"
+        index_url = f"{_get_hf_endpoint()}/{repo_id}/resolve/main/model.safetensors.index.json"
         index_data = json.loads(
             _make_request(index_url, timeout=timeout).decode("utf-8")
         )
@@ -183,7 +201,7 @@ def fetch_huggingface_repo(
 
         # Determine total size first
         req = urllib.request.Request(
-            f"https://huggingface.co/{repo_id}/resolve/main/model.safetensors",
+            f"{_get_hf_endpoint()}/{repo_id}/resolve/main/model.safetensors",
             method="HEAD",
         )
         token = _get_hf_token()
