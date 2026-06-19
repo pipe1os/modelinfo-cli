@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 import sys
+import math
 from typing import Sequence
 from modelinfo.architecture import identify_architecture_name
 from modelinfo.calculator import calculate_footprint
@@ -12,7 +13,13 @@ from modelinfo.ui import console, print_model_info, print_compare_info
 
 
 class VersionAction(argparse.Action):
-    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help="show program's version number and exit"):
+    def __init__(
+        self,
+        option_strings,
+        dest=argparse.SUPPRESS,
+        default=argparse.SUPPRESS,
+        help="show program's version number and exit",
+    ):
         super().__init__(
             option_strings=option_strings,
             dest=dest,
@@ -41,12 +48,25 @@ def _positive_int(value: str) -> int:
     return ivalue
 
 
+def _positive_float(value: str) -> float:
+    try:
+        fvalue = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"Invalid float value: {value}")
+
+    if not math.isfinite(fvalue):
+        raise argparse.ArgumentTypeError(f"Timeout must be a finite number: {value}")
+    if fvalue <= 0:
+        raise argparse.ArgumentTypeError(f"Timeout must be greater than 0: {value}")
+    return fvalue
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         prog="modelinfo",
         description="High-performance CLI utility to inspect ML model checkpoints and calculate VRAM requirements.",
     )
-    
+
     parser.add_argument(
         "file",
         type=str,
@@ -109,7 +129,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--timeout",
-        type=float,
+        type=_positive_float,
         default=10.0,
         help="Network request timeout in seconds for Hugging Face Hub (default 10.0).",
     )
@@ -133,21 +153,28 @@ def analyze_model(
     is_vllm: bool = False,
     gpu_vram_gb: float = 0.0,
     gpu_util: float = 0.9,
-    timeout: float = 10.0
+    timeout: float = 10.0,
 ) -> dict:
     tensors = {}
     config = None
     disk_size = 0.0
-    
+
     file_path_lower = file_path.lower()
-    
-    if not os.path.exists(file_path) and not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
+
+    if not os.path.exists(file_path) and not file_path_lower.endswith(
+        (".safetensors", ".gguf", ".pt", ".bin", ".index.json")
+    ):
         from modelinfo.parsers.huggingface import fetch_huggingface_repo
-        tensors, config, format_name, disk_size = fetch_huggingface_repo(file_path, fetch_tensors=fetch_tensors, timeout=timeout)
-    elif file_path_lower.endswith(".safetensors") or file_path_lower.endswith(".index.json"):
+
+        tensors, config, format_name, disk_size = fetch_huggingface_repo(
+            file_path, fetch_tensors=fetch_tensors, timeout=timeout
+        )
+    elif file_path_lower.endswith(".safetensors") or file_path_lower.endswith(
+        ".index.json"
+    ):
         tensors = parse_safetensors_header(file_path)
         format_name = "SafeTensors"
-        
+
         config_path = os.path.join(os.path.dirname(file_path), "config.json")
         if os.path.exists(config_path):
             try:
@@ -155,7 +182,7 @@ def analyze_model(
                     config = json.load(f)
             except (json.JSONDecodeError, OSError):
                 pass
-                
+
     elif file_path_lower.endswith(".gguf"):
         tensors = parse_gguf_header(file_path)
         format_name = "GGUF"
@@ -163,10 +190,14 @@ def analyze_model(
         tensors = parse_pytorch_header(file_path)
         format_name = "PyTorch"
     elif os.path.isdir(file_path):
-        raise IsADirectoryError(f"'{file_path}' is a directory. Please provide the path to a specific weights file (e.g. .safetensors, .gguf, .pt) inside the directory.")
+        raise IsADirectoryError(
+            f"'{file_path}' is a directory. Please provide the path to a specific weights file (e.g. .safetensors, .gguf, .pt) inside the directory."
+        )
     else:
-        raise ValueError(f"File '{file_path}' not found locally and does not appear to be a Hugging Face repository ID.")
-        
+        raise ValueError(
+            f"File '{file_path}' not found locally and does not appear to be a Hugging Face repository ID."
+        )
+
     max_context = None
     if config:
         max_context = config.get("max_position_embeddings")
@@ -175,7 +206,7 @@ def analyze_model(
         gen_arch = metadata.get("general.architecture")
         if gen_arch:
             max_context = metadata.get(f"{gen_arch}.context_length")
-            
+
     is_default_context = False
     context_length = context_override
     if context_length is None:
@@ -183,7 +214,7 @@ def analyze_model(
         is_default_context = True
 
     footprint = calculate_footprint(
-        tensors, 
+        tensors,
         context_length=context_length,
         batch_size=batch_size,
         config=config,
@@ -192,16 +223,16 @@ def analyze_model(
         strategy=strategy,
         is_vllm=is_vllm,
         gpu_vram_bytes=gpu_vram_gb * 1024**3 if gpu_vram_gb else 0.0,
-        gpu_util=gpu_util
+        gpu_util=gpu_util,
     )
     num_layers = footprint["num_layers"]
     arch_name = identify_architecture_name(tensors, num_layers, config)
 
     if format_name != "SafeTensors" or os.path.exists(file_path):
         disk_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0.0
-        
+
     tensor_count = len([k for k in tensors.keys() if k != "__metadata__"])
-    
+
     return {
         "format_name": format_name,
         "arch_name": arch_name,
@@ -218,7 +249,7 @@ def analyze_model(
         "strategy": strategy,
         "is_vllm": is_vllm,
         "gpu_vram_gb": gpu_vram_gb,
-        "gpu_util": gpu_util
+        "gpu_util": gpu_util,
     }
 
 
@@ -228,17 +259,20 @@ def main(argv: Sequence[str] | None = None) -> int:
     gpu_name_display = None
     gpu_vram_gb = None
     gpu_count = 1
-    
+
     if args.gpu or args.vllm:
         target = args.gpu if args.gpu else "auto"
         from modelinfo.hardware import resolve_gpu
+
         gpu_name_display, gpu_vram_gb, gpu_count = resolve_gpu(target)
 
     if len(args.file) > 1:
         if args.vllm:
-            console.print("[red]Error: Side-by-side comparison does not currently support the --vllm capacity simulation. Compare models sequentially or remove --vllm.[/red]")
+            console.print(
+                "[red]Error: Side-by-side comparison does not currently support the --vllm capacity simulation. Compare models sequentially or remove --vllm.[/red]"
+            )
             return 1
-            
+
         models = []
         for model_path in args.file:
             info = analyze_model(
@@ -252,15 +286,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 is_vllm=args.vllm,
                 gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
                 gpu_util=args.gpu_util,
-                timeout=args.timeout
+                timeout=args.timeout,
             )
             models.append((model_path.split("/")[-1], info))
-            
-        print_compare_info(models, gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
+
+        print_compare_info(
+            models,
+            gpu_vram_gb if gpu_vram_gb else args.max_vram,
+            gpu_name=gpu_name_display,
+        )
         return 0
-        
+
     file_path = args.file[0]
-    
+
     info = analyze_model(
         file_path,
         args.context,
@@ -272,10 +310,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         is_vllm=args.vllm,
         gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
         gpu_util=args.gpu_util,
-        timeout=args.timeout
+        timeout=args.timeout,
     )
 
-    print_model_info(**info, max_vram_gb=gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
+    print_model_info(
+        **info,
+        max_vram_gb=gpu_vram_gb if gpu_vram_gb else args.max_vram,
+        gpu_name=gpu_name_display,
+    )
     return 0
 
 
