@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import sys
 from typing import Sequence
@@ -43,8 +44,8 @@ def _positive_int(value: str) -> int:
 
 def _positive_float(value: str) -> float:
     fvalue = float(value)
-    if fvalue <= 0:
-        raise argparse.ArgumentTypeError("timeout must be greater than 0")
+    if not math.isfinite(fvalue) or fvalue <= 0:
+        raise argparse.ArgumentTypeError("timeout must be a finite number greater than 0")
     return fvalue
 
 
