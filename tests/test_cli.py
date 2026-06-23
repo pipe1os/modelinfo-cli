@@ -65,6 +65,20 @@ def test_timeout_flag_rejects_negative():
     assert exc_info.value.code == 2
 
 
+def test_timeout_flag_rejects_nan():
+    with pytest.raises(SystemExit) as exc_info:
+        parse_args(["--timeout", "nan", "model.gguf"])
+
+    assert exc_info.value.code == 2
+
+
+def test_timeout_flag_rejects_inf():
+    with pytest.raises(SystemExit) as exc_info:
+        parse_args(["--timeout", "inf", "model.gguf"])
+
+    assert exc_info.value.code == 2
+
+
 def test_analyze_model_passes_batch_size_to_footprint(monkeypatch, tmp_path):
     model_path = tmp_path / "model.gguf"
     model_path.write_bytes(b"mock")
