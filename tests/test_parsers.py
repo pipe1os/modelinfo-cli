@@ -1,5 +1,6 @@
 import os
 import pytest
+from modelinfo.parsers.huggingface import _get_hf_endpoint
 from modelinfo.parsers.safetensors import parse_safetensors_header
 
 FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -47,9 +48,6 @@ def test_gguf_parser_metadata():
     assert arch_name == "Qwen2 (1 transformer layers)"
 
 
-# --- HF_ENDPOINT validation ---
-
-from modelinfo.parsers.huggingface import _get_hf_endpoint
 
 
 def test_hf_endpoint_valid_https(monkeypatch):
