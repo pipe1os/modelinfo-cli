@@ -1,5 +1,6 @@
 import argparse
 import json
+import math
 import os
 import sys
 from typing import Sequence
@@ -39,6 +40,13 @@ def _positive_int(value: str) -> int:
     if ivalue < 1:
         raise argparse.ArgumentTypeError("batch size must be at least 1")
     return ivalue
+
+
+def _positive_float(value: str) -> float:
+    fvalue = float(value)
+    if not math.isfinite(fvalue) or fvalue <= 0:
+        raise argparse.ArgumentTypeError("timeout must be a finite number greater than 0")
+    return fvalue
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -83,6 +91,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         help="Deep dive: Fetch all remote tensor shards to display the exact tensor size breakdown.",
     )
     parser.add_argument(
+        "--timeout",
+        type=_positive_float,
+        default=10.0,
+        help="Network timeout in seconds for remote Hugging Face fetches.",
+    )
+    parser.add_argument(
         "--topology",
         type=str,
         choices=["nvlink", "pcie4", "pcie3"],
@@ -122,6 +136,7 @@ def analyze_model(
     gpu_count: int = 1,
     batch_size: int = 1,
     fetch_tensors: bool = False,
+    timeout: float = 10.0,
     topology: str = "pcie4",
     strategy: str = "tp",
     is_vllm: bool = False,
@@ -136,7 +151,9 @@ def analyze_model(
     
     if not os.path.exists(file_path) and not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
         from modelinfo.parsers.huggingface import fetch_huggingface_repo
-        tensors, config, format_name, disk_size = fetch_huggingface_repo(file_path, fetch_tensors=fetch_tensors)
+        tensors, config, format_name, disk_size = fetch_huggingface_repo(
+            file_path, fetch_tensors=fetch_tensors, timeout=timeout
+        )
     elif file_path_lower.endswith(".safetensors") or file_path_lower.endswith(".index.json"):
         tensors = parse_safetensors_header(file_path)
         format_name = "SafeTensors"
@@ -240,6 +257,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 gpu_count=gpu_count,
                 batch_size=args.batch_size,
                 fetch_tensors=args.tensors,
+                timeout=args.timeout,
                 topology=args.topology,
                 strategy=args.strategy,
                 is_vllm=args.vllm,
@@ -259,6 +277,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         gpu_count=gpu_count,
         batch_size=args.batch_size,
         fetch_tensors=args.tensors,
+        timeout=args.timeout,
         topology=args.topology,
         strategy=args.strategy,
         is_vllm=args.vllm,
