@@ -167,7 +167,7 @@ def test_detect_local_gpu_intel_unit_conversions(monkeypatch):
         ("16384.00", 16.0),  # Default MiB unit
     ]
     for size_str, expected_vram in test_cases:
-        def fake_run(command, **kwargs):
+        def fake_run(command, s=size_str, **kwargs):
             if command[0] in {"nvidia-smi", "rocm-smi"}:
                 raise FileNotFoundError(command[0])
             assert command == ["xpu-smi", "discovery"]
@@ -176,7 +176,7 @@ def test_detect_local_gpu_intel_unit_conversions(monkeypatch):
                 "| Device ID | Device Information                                   |\n"
                 "+-----------+------------------------------------------------------+\n"
                 "| 0         | Device Name: Intel(R) Arc(TM) A770 Graphics          |\n"
-                f"|           | Memory Physical Size: {size_str}                     |\n"
+                f"|           | Memory Physical Size: {s}                     |\n"
                 "+-----------+------------------------------------------------------+\n"
             )
             return completed(stdout)
@@ -206,6 +206,31 @@ def test_detect_local_gpu_falls_back_on_malformed_xpu_smi(monkeypatch):
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
 
     # Since xpu-smi didn't return valid memory, detect_local_gpu should fall back to default/next
+    assert hardware.detect_local_gpu() == ("Unknown", 8.0, 1)
+
+
+def test_detect_local_gpu_falls_back_on_mismatched_intel_count(monkeypatch):
+    def fake_run(command, **kwargs):
+        if command[0] in {"nvidia-smi", "rocm-smi"}:
+            raise FileNotFoundError(command[0])
+        if command[0] == "xpu-smi":
+            # 2 GPUs, but only 1 has memory size
+            stdout = (
+                "+-----------+------------------------------------------------------+\n"
+                "| Device ID | Device Information                                   |\n"
+                "+-----------+------------------------------------------------------+\n"
+                "| 0         | Device Name: Intel(R) Arc(TM) A770 Graphics          |\n"
+                "|           | Memory Physical Size: 16384.00 MiB                   |\n"
+                "+-----------+------------------------------------------------------+\n"
+                "| 1         | Device Name: Intel(R) Arc(TM) A770 Graphics          |\n"
+                "+-----------+------------------------------------------------------+\n"
+            )
+            return completed(stdout)
+        raise FileNotFoundError(command[0])
+
+    monkeypatch.setattr(hardware.subprocess, "run", fake_run)
+
+    # Since device count (2) != memory entries count (1), it must fall back
     assert hardware.detect_local_gpu() == ("Unknown", 8.0, 1)
 
 

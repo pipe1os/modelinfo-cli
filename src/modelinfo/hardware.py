@@ -232,6 +232,7 @@ def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
         )
         gpu_names: list[str] = []
         total_mib: float = 0.0
+        parsed_memory_entries: int = 0
 
         for line in result.stdout.splitlines():
             lower_line = line.lower()
@@ -255,8 +256,9 @@ def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
                         elif unit == "b":
                             val /= (1024.0 * 1024.0)
                     total_mib += val
+                    parsed_memory_entries += 1
 
-        if gpu_names and total_mib > 0.0:
+        if gpu_names and parsed_memory_entries == len(gpu_names) and total_mib > 0.0:
             gpu_count = len(gpu_names)
             first_name = gpu_names[0]
             display_name = (
