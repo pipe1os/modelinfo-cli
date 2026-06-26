@@ -243,18 +243,16 @@ def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
             elif "memory physical size:" in lower_line:
                 idx = lower_line.index("memory physical size:")
                 size_str = line[idx + len("memory physical size:"):].split("|")[0].strip()
-                match = re.search(r"([\d\.]+)", size_str)
+                match = re.search(r"([\d\.]+)\s*([a-zA-Z]*)", size_str)
                 if match:
                     val = float(match.group(1))
-                    unit_match = re.search(r"([a-zA-Z]+)", size_str)
-                    if unit_match:
-                        unit = unit_match.group(1).lower()
-                        if unit in ("gib", "gb"):
-                            val *= 1024.0
-                        elif unit in ("kib", "kb"):
-                            val /= 1024.0
-                        elif unit == "b":
-                            val /= (1024.0 * 1024.0)
+                    unit = match.group(2).lower()
+                    if unit in ("gib", "gb"):
+                        val *= 1024.0
+                    elif unit in ("kib", "kb"):
+                        val /= 1024.0
+                    elif unit == "b":
+                        val /= (1024.0 * 1024.0)
                     total_mib += val
                     parsed_memory_entries += 1
 

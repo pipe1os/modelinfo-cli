@@ -112,7 +112,7 @@ def test_detect_local_gpu_falls_back_to_xpu_smi(monkeypatch):
     def fake_run(command, **kwargs):
         if command[0] in {"nvidia-smi", "rocm-smi"}:
             raise FileNotFoundError(command[0])
-        assert command == ["xpu-smi", "discovery"]
+        assert command == ["xpu-smi", "discovery"]  # nosec
         stdout = (
             "+-----------+------------------------------------------------------+\n"
             "| Device ID | Device Information                                   |\n"
@@ -126,14 +126,14 @@ def test_detect_local_gpu_falls_back_to_xpu_smi(monkeypatch):
 
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
 
-    assert hardware.detect_local_gpu() == ("Intel(R) Arc(TM) A770 Graphics", 16.0, 1)
+    assert hardware.detect_local_gpu() == ("Intel(R) Arc(TM) A770 Graphics", 16.0, 1)  # nosec
 
 
 def test_detect_local_gpu_sums_multiple_intel_gpus(monkeypatch):
     def fake_run(command, **kwargs):
         if command[0] in {"nvidia-smi", "rocm-smi"}:
             raise FileNotFoundError(command[0])
-        assert command == ["xpu-smi", "discovery"]
+        assert command == ["xpu-smi", "discovery"]  # nosec
         stdout = (
             "+-----------+------------------------------------------------------+\n"
             "| Device ID | Device Information                                   |\n"
@@ -149,7 +149,7 @@ def test_detect_local_gpu_sums_multiple_intel_gpus(monkeypatch):
 
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
 
-    assert hardware.detect_local_gpu() == (
+    assert hardware.detect_local_gpu() == (  # nosec
         "Intel Multi-GPU (2x Intel(R) Data Center GPU Flex 170)",
         32.0,
         2,
@@ -170,7 +170,7 @@ def test_detect_local_gpu_intel_unit_conversions(monkeypatch):
         def fake_run(command, s=size_str, **kwargs):
             if command[0] in {"nvidia-smi", "rocm-smi"}:
                 raise FileNotFoundError(command[0])
-            assert command == ["xpu-smi", "discovery"]
+            assert command == ["xpu-smi", "discovery"]  # nosec
             stdout = (
                 "+-----------+------------------------------------------------------+\n"
                 "| Device ID | Device Information                                   |\n"
@@ -182,7 +182,7 @@ def test_detect_local_gpu_intel_unit_conversions(monkeypatch):
             return completed(stdout)
 
         monkeypatch.setattr(hardware.subprocess, "run", fake_run)
-        assert hardware.detect_local_gpu() == ("Intel(R) Arc(TM) A770 Graphics", expected_vram, 1)
+        assert hardware.detect_local_gpu() == ("Intel(R) Arc(TM) A770 Graphics", expected_vram, 1)  # nosec
 
 
 def test_detect_local_gpu_falls_back_on_malformed_xpu_smi(monkeypatch):
@@ -206,7 +206,7 @@ def test_detect_local_gpu_falls_back_on_malformed_xpu_smi(monkeypatch):
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
 
     # Since xpu-smi didn't return valid memory, detect_local_gpu should fall back to default/next
-    assert hardware.detect_local_gpu() == ("Unknown", 8.0, 1)
+    assert hardware.detect_local_gpu() == ("Unknown", 8.0, 1)  # nosec
 
 
 def test_detect_local_gpu_falls_back_on_mismatched_intel_count(monkeypatch):
@@ -231,7 +231,7 @@ def test_detect_local_gpu_falls_back_on_mismatched_intel_count(monkeypatch):
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
 
     # Since device count (2) != memory entries count (1), it must fall back
-    assert hardware.detect_local_gpu() == ("Unknown", 8.0, 1)
+    assert hardware.detect_local_gpu() == ("Unknown", 8.0, 1)  # nosec
 
 
 def test_detect_local_gpu_falls_back_to_apple_unified_memory(monkeypatch):
