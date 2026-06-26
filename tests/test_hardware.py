@@ -12,8 +12,7 @@ def completed(stdout: str) -> subprocess.CompletedProcess:
 def test_normalize_gpu_string_removes_vendor_fluff_and_separators():
     assert hardware.normalize_gpu_string("NVIDIA GeForce RTX 4090") == "rtx4090"
     assert (
-        hardware.normalize_gpu_string("AMD Radeon RX-7900 XTX Graphics")
-        == "rx7900xtx"
+        hardware.normalize_gpu_string("AMD Radeon RX-7900 XTX Graphics") == "rx7900xtx"
     )
     assert hardware.normalize_gpu_string("Intel Arc A770 Edition") == "a770"
 
@@ -51,6 +50,14 @@ def test_resolve_gpu_rejects_unknown_gpu_name():
         hardware.resolve_gpu("Mystery GPU")
 
 
+def test_resolve_gpu_suggests_close_matches():
+    with pytest.raises(
+        ValueError,
+        match="Unknown GPU target 'rtx490'\\. Did you mean:.*rtx4090",
+    ):
+        hardware.resolve_gpu("rtx490")
+
+
 def test_detect_local_gpu_reads_nvidia_smi(monkeypatch):
     def fake_run(command, **kwargs):
         assert command == [
@@ -58,7 +65,12 @@ def test_detect_local_gpu_reads_nvidia_smi(monkeypatch):
             "--query-gpu=name,memory.total",
             "--format=csv,noheader,nounits",
         ]
-        assert kwargs == {"capture_output": True, "text": True, "check": True}
+        assert kwargs == {
+            "capture_output": True,
+            "text": True,
+            "check": True,
+            "timeout": 2.0,
+        }
         return completed("NVIDIA GeForce RTX 4090, 24576\n")
 
     monkeypatch.setattr(hardware.subprocess, "run", fake_run)
