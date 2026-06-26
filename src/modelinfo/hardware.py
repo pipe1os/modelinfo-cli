@@ -221,6 +221,21 @@ def _detect_amd_gpu() -> Optional[Tuple[str, float, int]]:
     return None
 
 
+def _parse_intel_vram(size_str: str) -> Optional[float]:
+    match = re.search(r"([\d\.]+)\s*([a-zA-Z]*)", size_str)
+    if not match:
+        return None
+    val = float(match.group(1))
+    unit = match.group(2).lower()
+    if unit in ("gib", "gb"):
+        val *= 1024.0
+    elif unit in ("kib", "kb"):
+        val /= 1024.0
+    elif unit == "b":
+        val /= (1024.0 * 1024.0)
+    return val
+
+
 def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
@@ -243,16 +258,8 @@ def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
             elif "memory physical size:" in lower_line:
                 idx = lower_line.index("memory physical size:")
                 size_str = line[idx + len("memory physical size:"):].split("|")[0].strip()
-                match = re.search(r"([\d\.]+)\s*([a-zA-Z]*)", size_str)
-                if match:
-                    val = float(match.group(1))
-                    unit = match.group(2).lower()
-                    if unit in ("gib", "gb"):
-                        val *= 1024.0
-                    elif unit in ("kib", "kb"):
-                        val /= 1024.0
-                    elif unit == "b":
-                        val /= (1024.0 * 1024.0)
+                val = _parse_intel_vram(size_str)
+                if val is not None:
                     total_mib += val
                     parsed_memory_entries += 1
 
