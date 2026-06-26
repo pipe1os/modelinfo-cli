@@ -1,0 +1,10 @@
+---
+engines:
+  markdownlint:
+    exclude_paths:
+      - "CHANGELOG.md"
+      - "plans/**"
+  bandit:
+    exclude_paths:
+      - "tests/**"
+      - "tests/fixtures/**"

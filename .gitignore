@@ -226,3 +226,9 @@ CLAUDE.md
 .agents/
 .cursor/
 .claude/
+
+# Codacy local config and summary
+.codacy/
+
+# Serena AI agent memories and configuration
+.serena/
