@@ -236,6 +236,28 @@ def _parse_intel_vram(size_str: str) -> Optional[float]:
     return val
 
 
+def _parse_xpu_smi_output(stdout: str) -> Tuple[list[str], float, int]:
+    gpu_names: list[str] = []
+    total_mib: float = 0.0
+    parsed_memory_entries: int = 0
+
+    for line in stdout.splitlines():
+        lower_line = line.lower()
+        if "device name:" in lower_line:
+            idx = lower_line.index("device name:")
+            name = line[idx + len("device name:"):].split("|")[0].strip()
+            gpu_names.append(name)
+        elif "memory physical size:" in lower_line:
+            idx = lower_line.index("memory physical size:")
+            size_str = line[idx + len("memory physical size:"):].split("|")[0].strip()
+            val = _parse_intel_vram(size_str)
+            if val is not None:
+                total_mib += val
+                parsed_memory_entries += 1
+
+    return gpu_names, total_mib, parsed_memory_entries
+
+
 def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
@@ -245,23 +267,7 @@ def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
             check=True,
             timeout=2.0,
         )
-        gpu_names: list[str] = []
-        total_mib: float = 0.0
-        parsed_memory_entries: int = 0
-
-        for line in result.stdout.splitlines():
-            lower_line = line.lower()
-            if "device name:" in lower_line:
-                idx = lower_line.index("device name:")
-                name = line[idx + len("device name:"):].split("|")[0].strip()
-                gpu_names.append(name)
-            elif "memory physical size:" in lower_line:
-                idx = lower_line.index("memory physical size:")
-                size_str = line[idx + len("memory physical size:"):].split("|")[0].strip()
-                val = _parse_intel_vram(size_str)
-                if val is not None:
-                    total_mib += val
-                    parsed_memory_entries += 1
+        gpu_names, total_mib, parsed_memory_entries = _parse_xpu_smi_output(result.stdout)
 
         if gpu_names and parsed_memory_entries == len(gpu_names) and total_mib > 0.0:
             gpu_count = len(gpu_names)
