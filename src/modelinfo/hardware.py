@@ -1,6 +1,6 @@
 import re
 import subprocess
-from typing import Tuple
+from typing import Optional, Tuple
 
 KNOWN_GPUS = {
     # --- NVIDIA Consumer (RTX 50/40/30/20/10 Series & Titans) ---
@@ -157,8 +157,7 @@ def normalize_gpu_string(name: str) -> str:
     return re.sub(r"[\s\-]", "", name)
 
 
-def detect_local_gpu() -> Tuple[str, float, int]:
-    # 1. NVIDIA
+def _detect_nvidia_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
             [
@@ -189,8 +188,10 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             return display_name, total_mb / 1024.0, gpu_count
     except Exception:
         pass
+    return None
 
-    # 2. AMD (ROCm)
+
+def _detect_amd_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
             ["rocm-smi", "--showmeminfo", "vram"],
@@ -217,8 +218,10 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             return display_name, total_bytes / (1024.0**3), gpu_count
     except Exception:
         pass
+    return None
 
-    # 3. Intel (xpu-smi)
+
+def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
             ["xpu-smi", "discovery"],
@@ -253,7 +256,7 @@ def detect_local_gpu() -> Tuple[str, float, int]:
                             val /= (1024.0 * 1024.0)
                     total_mib += val
 
-        if gpu_names:
+        if gpu_names and total_mib > 0.0:
             gpu_count = len(gpu_names)
             first_name = gpu_names[0]
             display_name = (
@@ -262,8 +265,10 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             return display_name, total_mib / 1024.0, gpu_count
     except Exception:
         pass
+    return None
 
-    # 4. Apple Silicon
+
+def _detect_apple_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
             ["sysctl", "hw.memsize"],
@@ -278,6 +283,29 @@ def detect_local_gpu() -> Tuple[str, float, int]:
         return "Apple Silicon (Unified Memory)", vram_gb, 1
     except Exception:
         pass
+    return None
+
+
+def detect_local_gpu() -> Tuple[str, float, int]:
+    # 1. NVIDIA
+    nvidia_res = _detect_nvidia_gpu()
+    if nvidia_res is not None:
+        return nvidia_res
+
+    # 2. AMD (ROCm)
+    amd_res = _detect_amd_gpu()
+    if amd_res is not None:
+        return amd_res
+
+    # 3. Intel (xpu-smi)
+    intel_res = _detect_intel_gpu()
+    if intel_res is not None:
+        return intel_res
+
+    # 4. Apple Silicon
+    apple_res = _detect_apple_gpu()
+    if apple_res is not None:
+        return apple_res
 
     return "Unknown", 8.0, 1
 
