@@ -169,6 +169,7 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             capture_output=True,
             text=True,
             check=True,
+            timeout=2.0,
         )
         lines = [
             line.strip() for line in result.stdout.strip().split("\n") if line.strip()
@@ -196,6 +197,7 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             capture_output=True,
             text=True,
             check=True,
+            timeout=2.0,
         )
         lines = [
             line
@@ -219,7 +221,11 @@ def detect_local_gpu() -> Tuple[str, float, int]:
     # 3. Apple Silicon
     try:
         result = subprocess.run(
-            ["sysctl", "hw.memsize"], capture_output=True, text=True, check=True
+            ["sysctl", "hw.memsize"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2.0,
         )
         total_bytes = int(result.stdout.strip().split()[1])
         # Apply 75% operational heuristic for Apple Silicon wire limits
