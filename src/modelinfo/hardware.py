@@ -218,7 +218,52 @@ def detect_local_gpu() -> Tuple[str, float, int]:
     except Exception:
         pass
 
-    # 3. Apple Silicon
+    # 3. Intel (xpu-smi)
+    try:
+        result = subprocess.run(
+            ["xpu-smi", "discovery"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2.0,
+        )
+        gpu_names: list[str] = []
+        total_mib: float = 0.0
+
+        for line in result.stdout.splitlines():
+            lower_line = line.lower()
+            if "device name:" in lower_line:
+                idx = lower_line.index("device name:")
+                name = line[idx + len("device name:"):].split("|")[0].strip()
+                gpu_names.append(name)
+            elif "memory physical size:" in lower_line:
+                idx = lower_line.index("memory physical size:")
+                size_str = line[idx + len("memory physical size:"):].split("|")[0].strip()
+                match = re.search(r"([\d\.]+)", size_str)
+                if match:
+                    val = float(match.group(1))
+                    unit_match = re.search(r"([a-zA-Z]+)", size_str)
+                    if unit_match:
+                        unit = unit_match.group(1).lower()
+                        if unit in ("gib", "gb"):
+                            val *= 1024.0
+                        elif unit in ("kib", "kb"):
+                            val /= 1024.0
+                        elif unit == "b":
+                            val /= (1024.0 * 1024.0)
+                    total_mib += val
+
+        if gpu_names:
+            gpu_count = len(gpu_names)
+            first_name = gpu_names[0]
+            display_name = (
+                f"Intel Multi-GPU ({gpu_count}x {first_name})" if gpu_count > 1 else first_name
+            )
+            return display_name, total_mib / 1024.0, gpu_count
+    except Exception:
+        pass
+
+    # 4. Apple Silicon
     try:
         result = subprocess.run(
             ["sysctl", "hw.memsize"],

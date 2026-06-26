@@ -108,9 +108,57 @@ def test_detect_local_gpu_falls_back_to_rocm_smi(monkeypatch):
     assert hardware.detect_local_gpu() == ("AMD Multi-GPU (2x)", 32.0, 2)
 
 
-def test_detect_local_gpu_falls_back_to_apple_unified_memory(monkeypatch):
+def test_detect_local_gpu_falls_back_to_xpu_smi(monkeypatch):
     def fake_run(command, **kwargs):
         if command[0] in {"nvidia-smi", "rocm-smi"}:
+            raise FileNotFoundError(command[0])
+        assert command == ["xpu-smi", "discovery"]
+        stdout = (
+            "+-----------+------------------------------------------------------+\n"
+            "| Device ID | Device Information                                   |\n"
+            "+-----------+------------------------------------------------------+\n"
+            "| 0         | Device Name: Intel(R) Arc(TM) A770 Graphics          |\n"
+            "|           | Vendor Name: Intel(R) Corporation                    |\n"
+            "|           | Memory Physical Size: 16384.00 MiB                   |\n"
+            "+-----------+------------------------------------------------------+\n"
+        )
+        return completed(stdout)
+
+    monkeypatch.setattr(hardware.subprocess, "run", fake_run)
+
+    assert hardware.detect_local_gpu() == ("Intel(R) Arc(TM) A770 Graphics", 16.0, 1)
+
+
+def test_detect_local_gpu_sums_multiple_intel_gpus(monkeypatch):
+    def fake_run(command, **kwargs):
+        if command[0] in {"nvidia-smi", "rocm-smi"}:
+            raise FileNotFoundError(command[0])
+        assert command == ["xpu-smi", "discovery"]
+        stdout = (
+            "+-----------+------------------------------------------------------+\n"
+            "| Device ID | Device Information                                   |\n"
+            "+-----------+------------------------------------------------------+\n"
+            "| 0         | Device Name: Intel(R) Data Center GPU Flex 170       |\n"
+            "|           | Memory Physical Size: 16384.00 MiB                   |\n"
+            "+-----------+------------------------------------------------------+\n"
+            "| 1         | Device Name: Intel(R) Data Center GPU Flex 170       |\n"
+            "|           | Memory Physical Size: 16384.00 MiB                   |\n"
+            "+-----------+------------------------------------------------------+\n"
+        )
+        return completed(stdout)
+
+    monkeypatch.setattr(hardware.subprocess, "run", fake_run)
+
+    assert hardware.detect_local_gpu() == (
+        "Intel Multi-GPU (2x Intel(R) Data Center GPU Flex 170)",
+        32.0,
+        2,
+    )
+
+
+def test_detect_local_gpu_falls_back_to_apple_unified_memory(monkeypatch):
+    def fake_run(command, **kwargs):
+        if command[0] in {"nvidia-smi", "rocm-smi", "xpu-smi"}:
             raise FileNotFoundError(command[0])
         assert command == ["sysctl", "hw.memsize"]
         return completed("hw.memsize: 17179869184\n")
