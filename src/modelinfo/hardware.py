@@ -1,6 +1,6 @@
 import re
 import subprocess
-from typing import Tuple
+from typing import Optional, Tuple
 
 KNOWN_GPUS = {
     # --- NVIDIA Consumer (RTX 50/40/30/20/10 Series & Titans) ---
@@ -157,8 +157,7 @@ def normalize_gpu_string(name: str) -> str:
     return re.sub(r"[\s\-]", "", name)
 
 
-def detect_local_gpu() -> Tuple[str, float, int]:
-    # 1. NVIDIA
+def _detect_nvidia_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
             [
@@ -189,8 +188,10 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             return display_name, total_mb / 1024.0, gpu_count
     except Exception:
         pass
+    return None
 
-    # 2. AMD (ROCm)
+
+def _detect_amd_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
             ["rocm-smi", "--showmeminfo", "vram"],
@@ -217,8 +218,70 @@ def detect_local_gpu() -> Tuple[str, float, int]:
             return display_name, total_bytes / (1024.0**3), gpu_count
     except Exception:
         pass
+    return None
 
-    # 3. Apple Silicon
+
+def _parse_intel_vram(size_str: str) -> Optional[float]:
+    match = re.search(r"([\d\.]+)\s*([a-zA-Z]*)", size_str)
+    if not match:
+        return None
+    val = float(match.group(1))
+    unit = match.group(2).lower()
+    if unit in ("gib", "gb"):
+        val *= 1024.0
+    elif unit in ("kib", "kb"):
+        val /= 1024.0
+    elif unit == "b":
+        val /= (1024.0 * 1024.0)
+    return val
+
+
+def _parse_xpu_smi_output(stdout: str) -> Tuple[list[str], float, int]:
+    gpu_names: list[str] = []
+    total_mib: float = 0.0
+    parsed_memory_entries: int = 0
+
+    for line in stdout.splitlines():
+        lower_line = line.lower()
+        if "device name:" in lower_line:
+            idx = lower_line.index("device name:")
+            name = line[idx + len("device name:"):].split("|")[0].strip()
+            gpu_names.append(name)
+        elif "memory physical size:" in lower_line:
+            idx = lower_line.index("memory physical size:")
+            size_str = line[idx + len("memory physical size:"):].split("|")[0].strip()
+            val = _parse_intel_vram(size_str)
+            if val is not None:
+                total_mib += val
+                parsed_memory_entries += 1
+
+    return gpu_names, total_mib, parsed_memory_entries
+
+
+def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
+    try:
+        result = subprocess.run(
+            ["xpu-smi", "discovery"],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=2.0,
+        )
+        gpu_names, total_mib, parsed_memory_entries = _parse_xpu_smi_output(result.stdout)
+
+        if gpu_names and parsed_memory_entries == len(gpu_names) and total_mib > 0.0:
+            gpu_count = len(gpu_names)
+            first_name = gpu_names[0]
+            display_name = (
+                f"Intel Multi-GPU ({gpu_count}x {first_name})" if gpu_count > 1 else first_name
+            )
+            return display_name, total_mib / 1024.0, gpu_count
+    except Exception:
+        pass
+    return None
+
+
+def _detect_apple_gpu() -> Optional[Tuple[str, float, int]]:
     try:
         result = subprocess.run(
             ["sysctl", "hw.memsize"],
@@ -233,6 +296,29 @@ def detect_local_gpu() -> Tuple[str, float, int]:
         return "Apple Silicon (Unified Memory)", vram_gb, 1
     except Exception:
         pass
+    return None
+
+
+def detect_local_gpu() -> Tuple[str, float, int]:
+    # 1. NVIDIA
+    nvidia_res = _detect_nvidia_gpu()
+    if nvidia_res is not None:
+        return nvidia_res
+
+    # 2. AMD (ROCm)
+    amd_res = _detect_amd_gpu()
+    if amd_res is not None:
+        return amd_res
+
+    # 3. Intel (xpu-smi)
+    intel_res = _detect_intel_gpu()
+    if intel_res is not None:
+        return intel_res
+
+    # 4. Apple Silicon
+    apple_res = _detect_apple_gpu()
+    if apple_res is not None:
+        return apple_res
 
     return "Unknown", 8.0, 1
 
