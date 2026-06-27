@@ -169,3 +169,46 @@ def test_vllm_capacity_simulation():
     bytes_per_token = 40960
     expected_capacity = math.floor(metrics["paged_kv_pool"] / bytes_per_token)
     assert metrics["max_serving_capacity"] == expected_capacity
+
+
+def test_gguf_shape_guessing_fallback():
+    """Verify that shape guessing logic correctly extracts kv_dim using GGUF column-major ordering (shape[-1]) when metadata has no explicit keys."""
+    from modelinfo.architecture import extract_architecture
+
+    tensors = {
+        "__metadata__": {
+            "general.architecture": "llama",
+        },
+        "model.layers.0.self_attn.k_proj.weight": {
+            "shape": [4096, 1024],
+            "dtype": "F16"
+        },
+        "model.layers.1.self_attn.k_proj.weight": {
+            "shape": [4096, 1024],
+            "dtype": "F16"
+        }
+    }
+
+    num_layers, kv_dim, is_estimate = extract_architecture(tensors)
+    assert num_layers == 2
+    assert kv_dim == 1024
+    assert is_estimate is False
+
+def test_gguf_shape_guessing_fallback_fused():
+    """Verify that fused shape guessing extracts (shape[-1] // 3) for GGUF tensors."""
+    from modelinfo.architecture import extract_architecture
+
+    tensors = {
+        "__metadata__": {
+            "general.architecture": "gpt2",
+        },
+        "model.layers.0.self_attn.qkv_proj.weight": {
+            "shape": [4096, 3072],
+            "dtype": "F16"
+        }
+    }
+
+    num_layers, kv_dim, is_estimate = extract_architecture(tensors)
+    assert num_layers == 1
+    assert kv_dim == 1024
+    assert is_estimate is True
