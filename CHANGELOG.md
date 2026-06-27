@@ -5,7 +5,23 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
  
 ## [Unreleased]
- 
+
+## [1.4.4] - 2026-06-27
+
+### Added
+- Added the `--batch-size` flag (defaulting to 1) for dynamic KV cache footprint calculations.
+- Added the `--timeout` flag (defaulting to 10s) to configure network timeouts for remote Hugging Face fetches.
+- Added support for custom Hugging Face endpoints via the `HF_ENDPOINT` environment variable.
+- Added auto-discovery and memory capacity mapping for Intel GPUs using `xpu-smi`.
+- Added suggestions for similar GPU names using `difflib.get_close_matches` when an unrecognized GPU target is provided.
+
+### Changed
+- Reorganized local GPU discovery helpers in `hardware.py`.
+- Cleaned up test parser module imports to resolve E402 warnings.
+
+### Fixed
+- Propagated timeout values to all remote fetch requests in the Hugging Face parser.
+
 ## [1.4.3] - 2026-06-13
 
 ### Added
