@@ -228,10 +228,7 @@ def test_analyze_model_gguf_group(monkeypatch):
     assert len(info["tensors"]["__metadata__"]["gguf_variants"]) == 2
 
 
-def test_print_model_info_gguf_group(capsys):
-    """Test print_model_info renders a comparison table for GGUF groups."""
-    from modelinfo.ui import print_model_info
-    
+def _get_mock_gguf_group_data():
     tensors = {
         "__metadata__": {
             "general.architecture": "llama",
@@ -245,7 +242,6 @@ def test_print_model_info_gguf_group(capsys):
             "repo_id": "org/model-gguf"
         }
     }
-    
     footprint = {
         "total_params": 8000000000,
         "base_memory_bytes": 4000000000.0,
@@ -259,7 +255,13 @@ def test_print_model_info_gguf_group(capsys):
         "penalty_percentage": 0.0,
         "vllm_metrics": {}
     }
-    
+    return tensors, footprint
+
+
+def test_print_model_info_gguf_group_no_gpu(capsys):
+    """Test print_model_info renders comparison table without Fits column when no GPU target."""
+    from modelinfo.ui import print_model_info
+    tensors, footprint = _get_mock_gguf_group_data()
     print_model_info(
         format_name="GGUF_group",
         arch_name="Llama (32 layers)",
@@ -273,13 +275,17 @@ def test_print_model_info_gguf_group(capsys):
         max_vram_gb=8.0,
         gpu_name=None
     )
-    
-    out, err = capsys.readouterr()
+    out, _ = capsys.readouterr()
     assert "model-q4.gguf" in out
     assert "model-q8.gguf" in out
     assert "Fits" not in out
     assert "Tip:" in out
-    
+
+
+def test_print_model_info_gguf_group_with_gpu(capsys):
+    """Test print_model_info renders comparison table with Fits column when GPU target exists."""
+    from modelinfo.ui import print_model_info
+    tensors, footprint = _get_mock_gguf_group_data()
     print_model_info(
         format_name="GGUF_group",
         arch_name="Llama (32 layers)",
@@ -293,9 +299,9 @@ def test_print_model_info_gguf_group(capsys):
         max_vram_gb=8.0,
         gpu_name="RTX4080"
     )
-    
-    out, err = capsys.readouterr()
+    out, _ = capsys.readouterr()
     assert "model-q4.gguf" in out
     assert "model-q8.gguf" in out
     assert "Fits" in out
+
 
