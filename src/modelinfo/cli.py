@@ -246,6 +246,10 @@ def analyze_model(
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
 
+    # Strip trailing slashes from paths/repos to prevent empty basenames and routing issues
+    if args.file:
+        args.file = [path.rstrip("/") for path in args.file if path]
+
     gpu_name_display = None
     gpu_vram_gb = None
     gpu_count = 1
