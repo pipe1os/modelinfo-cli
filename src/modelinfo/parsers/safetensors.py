@@ -32,7 +32,7 @@ def parse_safetensors_header(path: str) -> dict[str, Any]:
         is_index = True
     elif "-of-" in base_name and path.endswith(".safetensors"):
         import re
-        match = re.match(r"^(.*?)-\d{5}-of-\d{5}\.safetensors$", base_name)
+        match = re.match(r"^(.*?)-\d+-of-\d+\.safetensors$", base_name)
         if match:
             prefix = match.group(1)
         else:
@@ -55,9 +55,12 @@ def parse_safetensors_header(path: str) -> dict[str, Any]:
     tensors = {}
     missing_shards = 0
     total_shards = len(unique_shards)
+    total_size = 0
     
     for shard in unique_shards:
         shard_path = os.path.join(dir_path, shard)
+        if os.path.exists(shard_path):
+            total_size += os.path.getsize(shard_path)
         try:
             shard_header = _read_single_header(shard_path)
             for k, v in shard_header.items():
@@ -69,7 +72,8 @@ def parse_safetensors_header(path: str) -> dict[str, Any]:
     tensors["__metadata__"] = {
         "missing_shards": missing_shards,
         "total_shards": total_shards,
-        "is_sharded": True
+        "is_sharded": True,
+        "disk_size": total_size
     }
     
     return tensors
