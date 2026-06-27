@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "modelinfo-cli"
-version = "1.4.3"
+version = "1.4.4"
 description = "A CLI tool to inspect ML checkpoints (.safetensors, .gguf, .pt) and calculate inference VRAM, multi-GPU memory splits, and vLLM serving capacity."
 readme = "README.md"
 requires-python = ">=3.10"
