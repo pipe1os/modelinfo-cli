@@ -31,7 +31,13 @@ def parse_safetensors_header(path: str) -> dict[str, Any]:
     if path.endswith(".index.json"):
         is_index = True
     elif "-of-" in base_name and path.endswith(".safetensors"):
-        prefix = base_name.split("-")[0]
+        import re
+        match = re.match(r"^(.*?)-\d{5}-of-\d{5}\.safetensors$", base_name)
+        if match:
+            prefix = match.group(1)
+        else:
+            # Fallback to splitting in case of non-standard shard formatting
+            prefix = base_name.split("-")[0]
         potential_index = os.path.join(dir_path, f"{prefix}.safetensors.index.json")
         if os.path.exists(potential_index):
             index_path = potential_index

@@ -202,3 +202,41 @@ def test_remote_gguf_parsing_not_found(monkeypatch):
     assert "Could not find repository on Hugging Face" in str(exc_info.value)
 
 
+
+
+def test_safetensors_sharded_with_hyphens(tmp_path):
+    """Test safetensors parser sharded index path resolution when filename contains hyphens."""
+    import struct
+    import json
+    
+    index_file = tmp_path / "mock-llama-3-8b.safetensors.index.json"
+    shard_file = tmp_path / "mock-llama-3-8b-00001-of-00002.safetensors"
+    
+    index_data = {
+        "weight_map": {
+            "model.embed_tokens.weight": "mock-llama-3-8b-00001-of-00002.safetensors"
+        }
+    }
+    index_file.write_text(json.dumps(index_data), encoding="utf-8")
+    
+    header_data = {
+        "model.embed_tokens.weight": {
+            "dtype": "BF16",
+            "shape": [32000, 4096],
+            "data_offsets": [0, 262144000]
+        }
+    }
+    header_json = json.dumps(header_data).encode("utf-8")
+    header_len = len(header_json)
+    
+    with open(shard_file, "wb") as f:
+        f.write(struct.pack("<Q", header_len))
+        f.write(header_json)
+        
+    tensors = parse_safetensors_header(str(shard_file))
+    
+    assert tensors.get("__metadata__", {}).get("is_sharded") is True
+    assert tensors.get("__metadata__", {}).get("total_shards") == 1
+    assert tensors.get("__metadata__", {}).get("missing_shards") == 0
+    assert "model.embed_tokens.weight" in tensors
+    assert tensors["model.embed_tokens.weight"]["dtype"] == "BF16"
