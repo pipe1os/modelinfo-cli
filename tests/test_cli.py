@@ -187,19 +187,7 @@ def test_analyze_model_gguf_group(monkeypatch):
         return False
         
     def fake_fetch(repo_id, *, fetch_tensors, timeout):
-        tensors = {
-            "__metadata__": {
-                "general.architecture": "llama",
-                "llama.block_count": 32,
-                "llama.attention.head_count_kv": 8,
-                "llama.attention.key_length": 128,
-                "gguf_variants": [
-                    {"filename": "model-q4.gguf", "size": 1000000000},
-                    {"filename": "model-q8.gguf", "size": 2000000000}
-                ],
-                "repo_id": "org/model-gguf"
-            }
-        }
+        tensors, _ = _get_mock_gguf_group_data()
         return tensors, None, "GGUF_group", 0.0
         
     monkeypatch.setattr(cli.os.path, "exists", fake_exists)
@@ -303,6 +291,38 @@ def test_print_model_info_gguf_group_with_gpu(capsys):
     assert "model-q4.gguf" in out
     assert "model-q8.gguf" in out
     assert "Fits" in out
+
+def test_analyze_model_local_path_routing(monkeypatch):
+    """Test that analyze_model treats paths starting with local prefix as local, raising an error instead of routing to Hugging Face."""
+    from modelinfo.parsers import huggingface
+
+    hf_fetched = []
+    def fake_fetch(repo_id, *, fetch_tensors, timeout):
+        hf_fetched.append(repo_id)
+        return {}, None, "SafeTensors", 0.0
+
+    monkeypatch.setattr(huggingface, "fetch_huggingface_repo", fake_fetch)
+
+    # Test cases that should NOT hit Hugging Face
+    local_paths = ["./missing.gguf", "../missing.safetensors", "/missing.bin", "~/missing.pt"]
+    for path in local_paths:
+        with pytest.raises((FileNotFoundError, ValueError, OSError)):
+            cli.analyze_model(path, context_override=128)
+
+    assert len(hf_fetched) == 0, f"Hugging Face fetch was triggered for local paths: {hf_fetched}"
+
+    # Test cases that SHOULD hit Hugging Face
+    remote_paths = ["meta-llama/Llama-2-7b-hf", "org/model"]
+    for path in remote_paths:
+        try:
+            cli.analyze_model(path, context_override=128)
+        except Exception:
+            # We don't care if calculation fails later because of empty dict from fake_fetch,
+            # we just care that it triggers fetch_huggingface_repo.
+            pass
+
+    assert hf_fetched == remote_paths
+
 
 def test_cli_strips_trailing_slashes_from_model_paths(monkeypatch):
     captured_paths = []
