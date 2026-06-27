@@ -212,19 +212,27 @@ def _fetch_remote_gguf_group(real_repo_id: str, gguf_files: List[Dict[str, Any]]
     return tensors
 
 
-def _fetch_shards_concurrently(real_repo_id: str, unique_shards: List[str], timeout: float) -> Dict[str, Any]:
+def _fetch_shards_concurrently(real_repo_id: str, unique_shards: List[str], timeout: float) -> Tuple[Dict[str, Any], int]:
     def fetch_shard(shard: str):
-        return shard, _fetch_safetensors_header(real_repo_id, shard, timeout=timeout)
+        try:
+            header = _fetch_safetensors_header(real_repo_id, shard, timeout=timeout)
+            return shard, header, None
+        except Exception as e:
+            return shard, {}, e
         
     tensors = {}
+    missing_shards = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(8, len(unique_shards)))) as executor:
         future_to_shard = {executor.submit(fetch_shard, shard): shard for shard in unique_shards}
         for future in concurrent.futures.as_completed(future_to_shard):
-            shard, shard_header = future.result()
-            for k, v in shard_header.items():
-                if k != "__metadata__":
-                    tensors[k] = v
-    return tensors
+            shard, shard_header, error = future.result()
+            if error is not None:
+                missing_shards += 1
+            else:
+                for k, v in shard_header.items():
+                    if k != "__metadata__":
+                        tensors[k] = v
+    return tensors, missing_shards
 
 
 def _fetch_remote_safetensors_sharded(
@@ -253,9 +261,9 @@ def _fetch_remote_safetensors_sharded(
             "total_size": total_size
         }
     else:
-        tensors = _fetch_shards_concurrently(real_repo_id, unique_shards, timeout)
+        tensors, missing_shards = _fetch_shards_concurrently(real_repo_id, unique_shards, timeout)
         tensors["__metadata__"] = {
-            "missing_shards": 0,
+            "missing_shards": missing_shards,
             "total_shards": len(unique_shards),
             "is_sharded": True
         }
