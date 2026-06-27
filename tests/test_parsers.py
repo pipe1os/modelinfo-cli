@@ -82,3 +82,90 @@ def test_hf_endpoint_rejects_no_hostname(monkeypatch):
     monkeypatch.setenv("HF_ENDPOINT", "https:///repo")
     with pytest.raises(ValueError, match="must include a valid hostname"):
         _get_hf_endpoint()
+
+
+def test_remote_gguf_parsing_single(monkeypatch):
+    """Test remote GGUF parsing when a single GGUF is found in the repository."""
+    import json
+    from modelinfo.parsers import huggingface
+    
+    def fake_make_request(url, headers=None, limit=None, timeout=10.0):
+        if "/api/models/" in url:
+            return json.dumps({
+                "siblings": [
+                    {"rfilename": "model-q4.gguf", "size": 1000000000}
+                ]
+            }).encode("utf-8")
+        elif "model-q4.gguf" in url:
+            import struct
+            header = b"GGUF" + struct.pack("<IQQ", 2, 0, 0)
+            return header
+        raise ValueError(f"Unexpected url: {url}")
+        
+    monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
+    
+    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf")
+    
+    assert format_name == "GGUF"
+    assert disk_size == 1000000000.0
+    assert tensors.get("__metadata__") == {}
+
+
+def test_remote_gguf_parsing_group(monkeypatch):
+    """Test remote GGUF parsing when multiple GGUF files are present in the repository."""
+    import json
+    from modelinfo.parsers import huggingface
+    
+    def fake_make_request(url, headers=None, limit=None, timeout=10.0):
+        if "/api/models/" in url:
+            return json.dumps({
+                "siblings": [
+                    {"rfilename": "model-q4.gguf", "size": 1000000000},
+                    {"rfilename": "model-q8.gguf", "size": 2000000000}
+                ]
+            }).encode("utf-8")
+        elif "model-q4.gguf" in url:
+            import struct
+            header = b"GGUF" + struct.pack("<IQQ", 2, 0, 0)
+            return header
+        raise ValueError(f"Unexpected url: {url}")
+        
+    monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
+    
+    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf")
+    
+    assert format_name == "GGUF_group"
+    assert disk_size == 0.0
+    assert "gguf_variants" in tensors["__metadata__"]
+    assert len(tensors["__metadata__"]["gguf_variants"]) == 2
+
+
+def test_remote_gguf_parsing_explicit(monkeypatch):
+    """Test remote GGUF parsing when the user targets a specific GGUF file in the repo id."""
+    import json
+    from modelinfo.parsers import huggingface
+    
+    called_gguf = []
+    def fake_make_request(url, headers=None, limit=None, timeout=10.0):
+        if "/api/models/" in url:
+            return json.dumps({
+                "siblings": [
+                    {"rfilename": "model-q4.gguf", "size": 1000000000},
+                    {"rfilename": "model-q8.gguf", "size": 2000000000}
+                ]
+            }).encode("utf-8")
+        elif "model-q8.gguf" in url:
+            called_gguf.append("q8")
+            import struct
+            header = b"GGUF" + struct.pack("<IQQ", 2, 0, 0)
+            return header
+        raise ValueError(f"Unexpected url: {url}")
+        
+    monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
+    
+    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf/model-q8.gguf")
+    
+    assert format_name == "GGUF"
+    assert disk_size == 2000000000.0
+    assert called_gguf == ["q8"]
+

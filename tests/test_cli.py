@@ -177,3 +177,125 @@ def test_analyze_model_passes_timeout_to_huggingface(monkeypatch):
         "fetch_tensors": True,
         "timeout": 22.5,
     }
+
+
+def test_analyze_model_gguf_group(monkeypatch):
+    """Test that analyze_model correctly handles and propagates GGUF groups."""
+    from modelinfo.parsers import huggingface
+    
+    def fake_exists(path):
+        return False
+        
+    def fake_fetch(repo_id, *, fetch_tensors, timeout):
+        tensors = {
+            "__metadata__": {
+                "general.architecture": "llama",
+                "llama.block_count": 32,
+                "llama.attention.head_count_kv": 8,
+                "llama.attention.key_length": 128,
+                "gguf_variants": [
+                    {"filename": "model-q4.gguf", "size": 1000000000},
+                    {"filename": "model-q8.gguf", "size": 2000000000}
+                ],
+                "repo_id": "org/model-gguf"
+            }
+        }
+        return tensors, None, "GGUF_group", 0.0
+        
+    monkeypatch.setattr(cli.os.path, "exists", fake_exists)
+    monkeypatch.setattr(huggingface, "fetch_huggingface_repo", fake_fetch)
+    
+    def fake_calculate_footprint(*args, **kwargs):
+        return {
+            "total_params": 1000000,
+            "base_memory_bytes": 2000000.0,
+            "kv_cache_bytes": 1000000.0,
+            "overhead_bytes": 600000.0,
+            "total_memory_bytes": 3600000.0,
+            "num_layers": 32,
+            "kv_dim": 1024,
+            "primary_dtype": "Q4_0",
+            "kv_is_estimate": False,
+            "penalty_percentage": 0.0,
+            "vllm_metrics": {}
+        }
+    monkeypatch.setattr(cli, "calculate_footprint", fake_calculate_footprint)
+    
+    info = cli.analyze_model("org/model-gguf", context_override=128)
+    
+    assert info["format_name"] == "GGUF_group"
+    assert info["tensors"]["__metadata__"]["repo_id"] == "org/model-gguf"
+    assert len(info["tensors"]["__metadata__"]["gguf_variants"]) == 2
+
+
+def test_print_model_info_gguf_group(capsys):
+    """Test print_model_info renders a comparison table for GGUF groups."""
+    from modelinfo.ui import print_model_info
+    
+    tensors = {
+        "__metadata__": {
+            "general.architecture": "llama",
+            "llama.block_count": 32,
+            "llama.attention.head_count_kv": 8,
+            "llama.attention.key_length": 128,
+            "gguf_variants": [
+                {"filename": "model-q4.gguf", "size": 1000000000},
+                {"filename": "model-q8.gguf", "size": 2000000000}
+            ],
+            "repo_id": "org/model-gguf"
+        }
+    }
+    
+    footprint = {
+        "total_params": 8000000000,
+        "base_memory_bytes": 4000000000.0,
+        "kv_cache_bytes": 1000000000.0,
+        "overhead_bytes": 600000000.0,
+        "total_memory_bytes": 5600000000.0,
+        "num_layers": 32,
+        "kv_dim": 1024,
+        "primary_dtype": "Q4_0",
+        "kv_is_estimate": False,
+        "penalty_percentage": 0.0,
+        "vllm_metrics": {}
+    }
+    
+    print_model_info(
+        format_name="GGUF_group",
+        arch_name="Llama (32 layers)",
+        tensor_count=0,
+        footprint=footprint,
+        disk_size=0.0,
+        context_length=8192,
+        is_default_context=True,
+        tensors=tensors,
+        max_context=32768,
+        max_vram_gb=8.0,
+        gpu_name=None
+    )
+    
+    out, err = capsys.readouterr()
+    assert "model-q4.gguf" in out
+    assert "model-q8.gguf" in out
+    assert "Fits" not in out
+    assert "Tip:" in out
+    
+    print_model_info(
+        format_name="GGUF_group",
+        arch_name="Llama (32 layers)",
+        tensor_count=0,
+        footprint=footprint,
+        disk_size=0.0,
+        context_length=8192,
+        is_default_context=True,
+        tensors=tensors,
+        max_context=32768,
+        max_vram_gb=8.0,
+        gpu_name="RTX4080"
+    )
+    
+    out, err = capsys.readouterr()
+    assert "model-q4.gguf" in out
+    assert "model-q8.gguf" in out
+    assert "Fits" in out
+

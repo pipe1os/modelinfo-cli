@@ -101,19 +101,94 @@ def _fetch_safetensors_header(repo_id: str, filename: str, timeout: float = 10.0
         
     return json.loads(json_bytes)
 
+def _get_remote_file_size_fallback(repo_id: str, filename: str, timeout: float = 10.0) -> float:
+    req = urllib.request.Request(f"{_get_hf_endpoint()}/{repo_id}/resolve/main/{filename}", method="HEAD")
+    token = _get_hf_token()
+    if token:
+        req.add_header("Authorization", f"Bearer {token}")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as response:
+            return float(response.headers.get("Content-Length", 0))
+    except Exception:
+        return 0.0
+
+
+class RemoteFileStream:
+    def __init__(self, url: str, chunk_size: int = 1024*1024, timeout: float = 10.0):
+        self.url = url
+        self.chunk_size = chunk_size
+        self.timeout = timeout
+        self.buffer = b""
+        self.position = 0
+
+    def read(self, size: int = -1) -> bytes:
+        if size == -1:
+            raise NotImplementedError("Unlimited remote read is not supported.")
+            
+        end_pos = self.position + size
+        while end_pos > len(self.buffer):
+            start_bytes = len(self.buffer)
+            end_bytes = start_bytes + self.chunk_size - 1
+            
+            headers = {"Range": f"bytes={start_bytes}-{end_bytes}"}
+            try:
+                chunk = _make_request(
+                    self.url,
+                    headers=headers,
+                    limit=self.chunk_size,
+                    timeout=self.timeout
+                )
+                if not chunk:
+                    break
+                self.buffer += chunk
+            except urllib.error.HTTPError as e:
+                if e.code == 416:
+                    break
+                raise
+            except Exception:
+                raise
+                
+        result = self.buffer[self.position:self.position+size]
+        self.position += len(result)
+        return result
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        if whence == 0:
+            self.position = offset
+        elif whence == 1:
+            self.position += offset
+        else:
+            raise NotImplementedError("Seek from end is not supported.")
+        return self.position
+
+    def tell(self) -> int:
+        return self.position
+
+    def close(self) -> None:
+        pass
+
+
 def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: float = 10.0) -> Tuple[Dict[str, Any], Dict[str, Any] | None, str, float]:
     """
     Fetches the metadata directly from the Hugging Face Hub over the network.
     Returns: (tensors, config, format_name, disk_size)
     """
-    api_url = f"{_get_hf_endpoint()}/api/models/{repo_id}"
+    target_filename = None
+    parts = repo_id.split("/")
+    if len(parts) >= 3 and parts[-1].lower().endswith(".gguf"):
+        real_repo_id = "/".join(parts[:2])
+        target_filename = "/".join(parts[2:])
+    else:
+        real_repo_id = repo_id
+
+    api_url = f"{_get_hf_endpoint()}/api/models/{real_repo_id}"
     try:
         api_data = json.loads(_make_request(api_url, timeout=timeout).decode("utf-8"))
     except urllib.error.HTTPError as e:
         if e.code == 401:
-            raise PermissionError(f"Gated/Private Model (401 Unauthorized). Set the HF_TOKEN environment variable to access {repo_id}")
+            raise PermissionError(f"Gated/Private Model (401 Unauthorized). Set the HF_TOKEN environment variable to access {real_repo_id}")
         if e.code == 404:
-             raise FileNotFoundError(f"Could not find repository on Hugging Face (404 Not Found): {repo_id}")
+             raise FileNotFoundError(f"Could not find repository on Hugging Face (404 Not Found): {real_repo_id}")
         raise
         
     siblings = api_data.get("siblings", [])
@@ -121,15 +196,38 @@ def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: f
     
     config = None
     if "config.json" in filenames:
-        config_url = f"{_get_hf_endpoint()}/{repo_id}/resolve/main/config.json"
+        config_url = f"{_get_hf_endpoint()}/{real_repo_id}/resolve/main/config.json"
         config = json.loads(_make_request(config_url, timeout=timeout).decode("utf-8"))
+
+    # Find GGUF siblings
+    gguf_files = []
+    for s in siblings:
+        fname = s.get("rfilename", "")
+        if fname.lower().endswith(".gguf"):
+            gguf_files.append({
+                "filename": fname,
+                "size": s.get("size")
+            })
+
+    if target_filename:
+        target_sibling = next((g for g in gguf_files if g["filename"] == target_filename), None)
+        if not target_sibling:
+            raise FileNotFoundError(f"Could not find file '{target_filename}' in Hugging Face repository '{real_repo_id}'.")
         
-    tensors = {}
-    total_size = 0.0
-    
+        url = f"{_get_hf_endpoint()}/{real_repo_id}/resolve/main/{target_filename}"
+        stream = RemoteFileStream(url, timeout=timeout)
+        from modelinfo.parsers.gguf import parse_gguf_header
+        tensors = parse_gguf_header(stream)
+        
+        size = target_sibling["size"] if target_sibling["size"] is not None else 0.0
+        if size == 0.0:
+            size = _get_remote_file_size_fallback(real_repo_id, target_filename, timeout)
+            
+        return tensors, config, "GGUF", float(size)
+
+    # Fallback to SafeTensors checks if no specific file is target
     if "model.safetensors.index.json" in filenames:
-        # Sharded SafeTensors
-        index_url = f"{_get_hf_endpoint()}/{repo_id}/resolve/main/model.safetensors.index.json"
+        index_url = f"{_get_hf_endpoint()}/{real_repo_id}/resolve/main/model.safetensors.index.json"
         index_data = json.loads(_make_request(index_url, timeout=timeout).decode("utf-8"))
         
         weight_map = index_data.get("weight_map", {})
@@ -137,8 +235,8 @@ def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: f
         
         total_size = index_data.get("metadata", {}).get("total_size", 0.0)
         
+        tensors = {}
         if config and not fetch_tensors and total_size > 0:
-            # Lazy Fetch Paradigm
             for tensor_name in weight_map.keys():
                 tensors[tensor_name] = {"shape": [], "dtype": "BF16"}
                 
@@ -151,7 +249,7 @@ def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: f
             }
         else:
             def fetch_shard(shard: str):
-                return shard, _fetch_safetensors_header(repo_id, shard, timeout=timeout)
+                return shard, _fetch_safetensors_header(real_repo_id, shard, timeout=timeout)
                 
             with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(8, len(unique_shards)))) as executor:
                 future_to_shard = {executor.submit(fetch_shard, shard): shard for shard in unique_shards}
@@ -166,13 +264,11 @@ def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: f
                 "total_shards": len(unique_shards),
                 "is_sharded": True
             }
-        format_name = "SafeTensors"
+        return tensors, config, "SafeTensors", float(total_size)
         
     elif "model.safetensors" in filenames:
-        # Single SafeTensors
-        
-        # Determine total size first
-        req = urllib.request.Request(f"{_get_hf_endpoint()}/{repo_id}/resolve/main/model.safetensors", method="HEAD")
+        total_size = 0.0
+        req = urllib.request.Request(f"{_get_hf_endpoint()}/{real_repo_id}/resolve/main/model.safetensors", method="HEAD")
         token = _get_hf_token()
         if token:
             req.add_header("Authorization", f"Bearer {token}")
@@ -182,12 +278,49 @@ def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: f
         except Exception:
             pass
 
-        header = _fetch_safetensors_header(repo_id, "model.safetensors", timeout=timeout)
-        tensors = header
+        header = _fetch_safetensors_header(real_repo_id, "model.safetensors", timeout=timeout)
+        return header, config, "SafeTensors", float(total_size)
+
+    elif gguf_files:
+        if len(gguf_files) == 1:
+            single_file = gguf_files[0]["filename"]
+            url = f"{_get_hf_endpoint()}/{real_repo_id}/resolve/main/{single_file}"
+            stream = RemoteFileStream(url, timeout=timeout)
+            from modelinfo.parsers.gguf import parse_gguf_header
+            tensors = parse_gguf_header(stream)
+            size = gguf_files[0]["size"] if gguf_files[0]["size"] is not None else 0.0
+            if size == 0.0:
+                size = _get_remote_file_size_fallback(real_repo_id, single_file, timeout)
+            return tensors, config, "GGUF", float(size)
+        else:
+            valid_sizes = [g for g in gguf_files if g["size"] is not None and g["size"] > 0]
+            if valid_sizes:
+                header_target = min(valid_sizes, key=lambda x: x["size"])
+            else:
+                header_target = gguf_files[0]
             
-        format_name = "SafeTensors"
-        
+            header_file = header_target["filename"]
+            url = f"{_get_hf_endpoint()}/{real_repo_id}/resolve/main/{header_file}"
+            stream = RemoteFileStream(url, timeout=timeout)
+            from modelinfo.parsers.gguf import parse_gguf_header
+            tensors = parse_gguf_header(stream)
+            
+            variants = []
+            for g in gguf_files:
+                v_size = g["size"]
+                if v_size is None or v_size == 0:
+                    v_size = _get_remote_file_size_fallback(real_repo_id, g["filename"], timeout)
+                variants.append({
+                    "filename": g["filename"],
+                    "size": float(v_size)
+                })
+            
+            tensors["__metadata__"] = tensors.get("__metadata__", {})
+            tensors["__metadata__"]["gguf_variants"] = variants
+            tensors["__metadata__"]["repo_id"] = real_repo_id
+            
+            return tensors, config, "GGUF_group", 0.0
+
     else:
-        raise ValueError(f"Repository {repo_id} does not contain SafeTensors weights.")
-        
-    return tensors, config, format_name, float(total_size)
+        raise ValueError(f"Repository {real_repo_id} does not contain SafeTensors or GGUF weights.")
+

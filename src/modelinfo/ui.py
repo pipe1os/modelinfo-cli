@@ -56,6 +56,61 @@ def print_model_info(
     gpu_vram_gb: float = 0.0,
     gpu_util: float = 0.9
 ) -> None:
+    if format_name == "GGUF_group":
+        metadata = tensors.get("__metadata__", {})
+        variants = metadata.get("gguf_variants", [])
+        repo_id = metadata.get("repo_id", "")
+        
+        console.print(f"[bold]Repository:[/bold]      {repo_id}")
+        console.print("[bold]Format:[/bold]          GGUF (Multiple Quantizations)")
+        console.print(f"[bold]Architecture:[/bold]    {arch_name}")
+        if max_context:
+            console.print(f"[bold]Context Limit:[/bold]   {max_context:,} tokens")
+        console.print()
+        
+        table = Table(box=None, show_header=True, header_style="bold", pad_edge=False, padding=(0, 2))
+        table.add_column("Quantization File")
+        table.add_column("File Size", justify="right")
+        table.add_column("KV Cache", justify="right")
+        table.add_column("Total VRAM", justify="right")
+        
+        show_fits = gpu_name is not None
+        if show_fits:
+            table.add_column("Fits", justify="left")
+            
+        kv_cache_bytes = footprint["kv_cache_bytes"]
+        overhead_bytes = footprint.get("overhead_bytes", 600 * 1024 * 1024)
+        
+        sorted_variants = sorted(variants, key=lambda x: x["size"], reverse=True)
+        for var in sorted_variants:
+            filename = var["filename"]
+            size_bytes = var["size"]
+            total_vram_bytes = size_bytes + kv_cache_bytes + overhead_bytes
+            
+            file_size_str = format_bytes(size_bytes)
+            kv_cache_str = format_bytes(kv_cache_bytes)
+            
+            vram_color = get_vram_color(total_vram_bytes, max_vram_gb)
+            total_vram_str = f"[{vram_color}]~{format_bytes(total_vram_bytes)}[/{vram_color}]"
+            
+            row_data = [filename, file_size_str, kv_cache_str, total_vram_str]
+            if show_fits:
+                utilization = total_vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
+                if utilization <= 0.90:
+                    fit_text = "[green]✓ Yes[/green]"
+                elif utilization <= 0.99:
+                    fit_text = "[yellow]⚠ Warning[/yellow]"
+                else:
+                    fit_text = "[red]✗ No[/red]"
+                row_data.append(fit_text)
+                
+            table.add_row(*row_data)
+            
+        console.print(table)
+        console.print()
+        console.print(f"[dim]Tip: To view details for a specific quantization, run: modelinfo {repo_id}/{sorted_variants[0]['filename']}[/dim]")
+        return
+
     summary = Table(box=None, show_header=False, pad_edge=False, padding=(0, 2))
     summary.add_column("Property", style="bold")
     summary.add_column("Value")

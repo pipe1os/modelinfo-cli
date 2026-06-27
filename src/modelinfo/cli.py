@@ -149,7 +149,12 @@ def analyze_model(
     
     file_path_lower = file_path.lower()
     
-    if not os.path.exists(file_path) and not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
+    is_remote = False
+    if not os.path.exists(file_path):
+        if "/" in file_path or not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
+            is_remote = True
+
+    if is_remote:
         from modelinfo.parsers.huggingface import fetch_huggingface_repo
         tensors, config, format_name, disk_size = fetch_huggingface_repo(
             file_path, fetch_tensors=fetch_tensors, timeout=timeout
@@ -180,7 +185,7 @@ def analyze_model(
     max_context = None
     if config:
         max_context = config.get("max_position_embeddings")
-    elif format_name == "GGUF":
+    elif format_name in ("GGUF", "GGUF_group"):
         metadata = tensors.get("__metadata__", {})
         gen_arch = metadata.get("general.architecture")
         if gen_arch:
@@ -207,8 +212,8 @@ def analyze_model(
     num_layers = footprint["num_layers"]
     arch_name = identify_architecture_name(tensors, num_layers, config)
 
-    if format_name != "SafeTensors" or os.path.exists(file_path):
-        disk_size = os.path.getsize(file_path) if os.path.exists(file_path) else 0.0
+    if os.path.exists(file_path):
+        disk_size = os.path.getsize(file_path)
         
     tensor_count = len([k for k in tensors.keys() if k != "__metadata__"])
     
