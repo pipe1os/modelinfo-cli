@@ -237,3 +237,49 @@ def test_safetensors_sharded_with_hyphens(tmp_path):
     assert tensors.get("__metadata__", {}).get("missing_shards") == 0
     assert "model.embed_tokens.weight" in tensors
     assert tensors["model.embed_tokens.weight"]["dtype"] == "BF16"
+
+
+def test_remote_shard_download_failure(monkeypatch):
+    """Test remote sharded safetensors parsing when one of the shard downloads fails."""
+    import json
+    import struct
+    import urllib.error
+    from modelinfo.parsers import huggingface
+
+    def fake_make_request(url, headers=None, limit=None, timeout=10.0):
+        if "/api/models/" in url:
+            return json.dumps({
+                "siblings": [
+                    {"rfilename": "model.safetensors.index.json"},
+                    {"rfilename": "model-00001-of-00002.safetensors"},
+                    {"rfilename": "model-00002-of-00002.safetensors"}
+                ]
+            }).encode("utf-8")
+        elif "model.safetensors.index.json" in url:
+            return json.dumps({
+                "metadata": {"total_size": 2000000000},
+                "weight_map": {
+                    "layer1.weight": "model-00001-of-00002.safetensors",
+                    "layer2.weight": "model-00002-of-00002.safetensors"
+                }
+            }).encode("utf-8")
+        elif "model-00001-of-00002.safetensors" in url:
+            header_json = json.dumps({"layer1.weight": {"dtype": "BF16", "shape": [1024, 1024]}}).encode("utf-8")
+            return struct.pack("<Q", len(header_json)) + header_json
+        elif "model-00002-of-00002.safetensors" in url:
+            raise urllib.error.HTTPError(url, 502, "Bad Gateway", {}, None)
+        raise ValueError(f"Unexpected url: {url}")
+
+    monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
+
+    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo(
+        "org/sharded-safetensors-model", fetch_tensors=True
+    )
+
+    assert format_name == "SafeTensors"
+    assert disk_size == 2000000000.0
+    assert tensors["__metadata__"]["missing_shards"] == 1
+    assert tensors["__metadata__"]["total_shards"] == 2
+    assert tensors["__metadata__"]["is_sharded"] is True
+    assert "layer1.weight" in tensors
+    assert "layer2.weight" not in tensors
