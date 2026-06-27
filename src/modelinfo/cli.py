@@ -157,7 +157,8 @@ def analyze_model(
             or os.path.isabs(file_path)
         )
         if not is_local_path:
-            if "/" in file_path or not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
+            # Treat as remote only if it contains a slash and does not end with a model extension
+            if "/" in file_path and not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
                 is_remote = True
 
     if is_remote:
@@ -218,8 +219,12 @@ def analyze_model(
     num_layers = footprint["num_layers"]
     arch_name = identify_architecture_name(tensors, num_layers, config)
 
-    if os.path.exists(file_path):
-        disk_size = os.path.getsize(file_path)
+    if not is_remote:
+        metadata = tensors.get("__metadata__", {})
+        if metadata.get("is_sharded") and "disk_size" in metadata:
+            disk_size = metadata["disk_size"]
+        elif os.path.exists(file_path):
+            disk_size = os.path.getsize(file_path)
         
     tensor_count = len([k for k in tensors.keys() if k != "__metadata__"])
     
@@ -248,7 +253,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     # Strip trailing slashes from paths/repos to prevent empty basenames and routing issues
     if args.file:
-        args.file = [path.rstrip("/") for path in args.file if path]
+        args.file = [path.rstrip("/\\") for path in args.file if path]
 
     gpu_name_display = None
     gpu_vram_gb = None

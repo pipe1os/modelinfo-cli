@@ -187,19 +187,7 @@ def test_analyze_model_gguf_group(monkeypatch):
         return False
         
     def fake_fetch(repo_id, *, fetch_tensors, timeout):
-        tensors = {
-            "__metadata__": {
-                "general.architecture": "llama",
-                "llama.block_count": 32,
-                "llama.attention.head_count_kv": 8,
-                "llama.attention.key_length": 128,
-                "gguf_variants": [
-                    {"filename": "model-q4.gguf", "size": 1000000000},
-                    {"filename": "model-q8.gguf", "size": 2000000000}
-                ],
-                "repo_id": "org/model-gguf"
-            }
-        }
+        tensors, _ = _get_mock_gguf_group_data()
         return tensors, None, "GGUF_group", 0.0
         
     monkeypatch.setattr(cli.os.path, "exists", fake_exists)
