@@ -96,7 +96,7 @@ def print_model_info(
             row_data = [filename, file_size_str, kv_cache_str, total_vram_str]
             if show_fits:
                 utilization = total_vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
-                if utilization <= 0.90:
+                if utilization <= gpu_util:
                     fit_text = "[green]✓ Yes[/green]"
                 elif utilization <= 0.99:
                     fit_text = "[yellow]⚠ Warning[/yellow]"
@@ -198,7 +198,7 @@ def print_model_info(
         summary.add_row("VRAM (est):", vram_display)
         if gpu_name:
             utilization = vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
-            if utilization <= 0.90:
+            if utilization <= gpu_util:
                 fit_text = f"[green]✓ Fits comfortably in {gpu_name} ({max_vram_gb:.1f} GB)[/green]"
             elif utilization <= 0.99:
                 fit_text = f"[yellow]⚠ Warning: Extreme hardware limit on {gpu_name}. High risk of fragmentation OOM.[/yellow]"

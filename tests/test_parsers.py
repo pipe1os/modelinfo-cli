@@ -169,3 +169,36 @@ def test_remote_gguf_parsing_explicit(monkeypatch):
     assert disk_size == 2000000000.0
     assert called_gguf == ["q8"]
 
+
+def test_remote_gguf_parsing_unauthorized(monkeypatch):
+    """Test remote parsing raises PermissionError for gated/unauthorized (401) model repositories."""
+    import urllib.error
+    from modelinfo.parsers import huggingface
+    
+    def fake_make_request(url, headers=None, limit=None, timeout=10.0):
+        raise urllib.error.HTTPError(url, 401, "Unauthorized", {}, None)
+        
+    monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
+    
+    import pytest
+    with pytest.raises(PermissionError) as exc_info:
+        huggingface.fetch_huggingface_repo("org/gated-model")
+    assert "Gated/Private Model" in str(exc_info.value)
+
+
+def test_remote_gguf_parsing_not_found(monkeypatch):
+    """Test remote parsing raises FileNotFoundError for missing (404) model repositories."""
+    import urllib.error
+    from modelinfo.parsers import huggingface
+    
+    def fake_make_request(url, headers=None, limit=None, timeout=10.0):
+        raise urllib.error.HTTPError(url, 404, "Not Found", {}, None)
+        
+    monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
+    
+    import pytest
+    with pytest.raises(FileNotFoundError) as exc_info:
+        huggingface.fetch_huggingface_repo("org/nonexistent-model")
+    assert "Could not find repository on Hugging Face" in str(exc_info.value)
+
+
