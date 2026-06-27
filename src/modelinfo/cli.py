@@ -151,8 +151,14 @@ def analyze_model(
     
     is_remote = False
     if not os.path.exists(file_path):
-        if "/" in file_path or not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
-            is_remote = True
+        # ponytail: prevent routing explicit local paths or typos to HF
+        is_local_path = (
+            file_path.startswith((".", "/", "~"))
+            or os.path.isabs(file_path)
+        )
+        if not is_local_path:
+            if "/" in file_path or not file_path_lower.endswith((".safetensors", ".gguf", ".pt", ".bin", ".index.json")):
+                is_remote = True
 
     if is_remote:
         from modelinfo.parsers.huggingface import fetch_huggingface_repo
