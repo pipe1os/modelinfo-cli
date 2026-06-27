@@ -79,13 +79,15 @@ def print_model_info(
             table.add_column("Fits", justify="left")
             
         kv_cache_bytes = footprint["kv_cache_bytes"]
-        overhead_bytes = footprint.get("overhead_bytes", 600 * 1024 * 1024)
+        penalty_percentage = footprint.get("penalty_percentage", 0.0)
+        cuda_overhead = 600 * 1024 * 1024 * gpu_count
         
         sorted_variants = sorted(variants, key=lambda x: x["size"], reverse=True)
         for var in sorted_variants:
             filename = var["filename"]
             size_bytes = var["size"]
-            total_vram_bytes = size_bytes + kv_cache_bytes + overhead_bytes
+            variant_overhead = cuda_overhead + (size_bytes * penalty_percentage)
+            total_vram_bytes = size_bytes + kv_cache_bytes + variant_overhead
             
             file_size_str = format_bytes(size_bytes)
             kv_cache_str = format_bytes(kv_cache_bytes)
