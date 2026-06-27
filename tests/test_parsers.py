@@ -202,8 +202,6 @@ def test_remote_gguf_parsing_not_found(monkeypatch):
     assert "Could not find repository on Hugging Face" in str(exc_info.value)
 
 
-
-
 def test_safetensors_sharded_with_hyphens(tmp_path):
     """Test safetensors parser sharded index path resolution when filename contains hyphens."""
     import struct
