@@ -44,46 +44,53 @@ def _read_gguf_value(f: Any, val_type: int) -> Any:
         raise ValueError(f"Unknown GGUF value type: {val_type}")
 
 
-def parse_gguf_header(path: str) -> Dict[str, Any]:
+def parse_gguf_header(path_or_file: str | Any) -> Dict[str, Any]:
     """Parses a GGUF file header and extracts tensor information."""
+    if isinstance(path_or_file, str):
+        with open(path_or_file, "rb") as f:
+            return _parse_gguf_header_from_stream(f)
+    else:
+        return _parse_gguf_header_from_stream(path_or_file)
+
+
+def _parse_gguf_header_from_stream(f: Any) -> Dict[str, Any]:
     tensors: Dict[str, Any] = {}
-    
-    with open(path, "rb") as f:
-        magic = f.read(4)
-        if magic != b"GGUF":
-            raise ValueError("Invalid GGUF file: Magic bytes missing.")
-            
-        version = struct.unpack("<I", f.read(4))[0]
-        if version < 2:
-            raise ValueError(f"Unsupported GGUF version: {version}")
-            
-        tensor_count = struct.unpack("<Q", f.read(8))[0]
-        kv_count = struct.unpack("<Q", f.read(8))[0]
+    magic = f.read(4)
+    if magic != b"GGUF":
+        raise ValueError("Invalid GGUF file: Magic bytes missing.")
         
-        metadata = {}
-        for _ in range(kv_count):
-            key_len = struct.unpack("<Q", f.read(8))[0]
-            key_name = f.read(key_len).decode("utf-8")
-            val_type = struct.unpack("<I", f.read(4))[0]
-            metadata[key_name] = _read_gguf_value(f, val_type)
+    version = struct.unpack("<I", f.read(4))[0]
+    if version < 2:
+        raise ValueError(f"Unsupported GGUF version: {version}")
+        
+    tensor_count = struct.unpack("<Q", f.read(8))[0]
+    kv_count = struct.unpack("<Q", f.read(8))[0]
+    
+    metadata = {}
+    for _ in range(kv_count):
+        key_len = struct.unpack("<Q", f.read(8))[0]
+        key_name = f.read(key_len).decode("utf-8")
+        val_type = struct.unpack("<I", f.read(4))[0]
+        metadata[key_name] = _read_gguf_value(f, val_type)
+        
+    tensors["__metadata__"] = metadata
+        
+    for _ in range(tensor_count):
+        name_len = struct.unpack("<Q", f.read(8))[0]
+        name = f.read(name_len).decode("utf-8")
+        
+        n_dims = struct.unpack("<I", f.read(4))[0]
+        shape = []
+        for _ in range(n_dims):
+            shape.append(struct.unpack("<Q", f.read(8))[0])
+        
+        t_type = struct.unpack("<I", f.read(4))[0]
+        f.read(8)  # skip offset bytes
+        
+        # Strict GGUF tensor type mapping
+        dtype = GGML_TYPE_MAP.get(t_type, "Unknown")
             
-        tensors["__metadata__"] = metadata
-            
-        for _ in range(tensor_count):
-            name_len = struct.unpack("<Q", f.read(8))[0]
-            name = f.read(name_len).decode("utf-8")
-            
-            n_dims = struct.unpack("<I", f.read(4))[0]
-            shape = []
-            for _ in range(n_dims):
-                shape.append(struct.unpack("<Q", f.read(8))[0])
-            
-            t_type = struct.unpack("<I", f.read(4))[0]
-            f.read(8)  # skip offset bytes
-            
-            # Strict GGUF tensor type mapping
-            dtype = GGML_TYPE_MAP.get(t_type, "Unknown")
-                
-            tensors[name] = {"shape": shape, "dtype": dtype}
-            
+        tensors[name] = {"shape": shape, "dtype": dtype}
+        
     return tensors
+

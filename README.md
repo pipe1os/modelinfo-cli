@@ -64,10 +64,17 @@ Inspect a local model checkpoint:
 modelinfo mistral-7b.safetensors
 ```
 
-Inspect a remote model directly from the Hugging Face Hub:
+Inspect a remote model directly from the Hugging Face Hub (both SafeTensors and GGUF):
 
 ```bash
+# Inspect a remote SafeTensors repository
 modelinfo meta-llama/Llama-2-7b-hf
+
+# Inspect a remote GGUF repository (shows a comparison table of all quantizations)
+modelinfo bartowski/Meta-Llama-3-8B-Instruct-GGUF
+
+# Inspect a specific remote GGUF file in a repository
+modelinfo bartowski/Meta-Llama-3-8B-Instruct-GGUF/Meta-Llama-3-8B-Instruct-Q4_K_M.gguf
 ```
 
 For gated models (e.g., Llama 2), you must provide authentication by setting the `HF_TOKEN` environment variable. You can create a token in your [Hugging Face settings](https://huggingface.co/settings/tokens).
