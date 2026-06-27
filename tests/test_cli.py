@@ -187,19 +187,7 @@ def test_analyze_model_gguf_group(monkeypatch):
         return False
         
     def fake_fetch(repo_id, *, fetch_tensors, timeout):
-        tensors = {
-            "__metadata__": {
-                "general.architecture": "llama",
-                "llama.block_count": 32,
-                "llama.attention.head_count_kv": 8,
-                "llama.attention.key_length": 128,
-                "gguf_variants": [
-                    {"filename": "model-q4.gguf", "size": 1000000000},
-                    {"filename": "model-q8.gguf", "size": 2000000000}
-                ],
-                "repo_id": "org/model-gguf"
-            }
-        }
+        tensors, _ = _get_mock_gguf_group_data()
         return tensors, None, "GGUF_group", 0.0
         
     monkeypatch.setattr(cli.os.path, "exists", fake_exists)
@@ -334,3 +322,49 @@ def test_analyze_model_local_path_routing(monkeypatch):
             pass
 
     assert hf_fetched == remote_paths
+
+
+def test_cli_strips_trailing_slashes_from_model_paths(monkeypatch):
+    captured_paths = []
+    
+    def fake_analyze_model(file_path, *args, **kwargs):
+        captured_paths.append(file_path)
+        return {
+            "format_name": "GGUF",
+            "arch_name": "Llama",
+            "tensor_count": 10,
+            "footprint": {
+                "total_params": 100,
+                "base_memory_bytes": 200,
+                "kv_cache_bytes": 100,
+                "overhead_bytes": 50,
+                "total_memory_bytes": 350,
+                "num_layers": 1,
+            },
+            "disk_size": 200,
+            "context_length": 128,
+            "is_default_context": True,
+            "tensors": {},
+            "max_context": 512,
+            "is_lazy": False,
+            "gpu_count": 1,
+            "topology": "pcie4",
+            "strategy": "tp",
+            "is_vllm": False,
+            "gpu_vram_gb": 0.0,
+            "gpu_util": 0.9,
+        }
+
+    monkeypatch.setattr(cli, "analyze_model", fake_analyze_model)
+    monkeypatch.setattr(cli, "print_compare_info", lambda models, max_vram, gpu_name: None)
+    monkeypatch.setattr(cli, "print_model_info", lambda *args, **kwargs: None)
+
+    # Test single model path with trailing slash
+    cli.main(["meta-llama/Llama-2-7b-hf/"])
+    assert captured_paths == ["meta-llama/Llama-2-7b-hf"]
+
+    captured_paths.clear()
+
+    # Test multiple model paths with trailing slashes (side-by-side comparison)
+    cli.main(["meta-llama/Llama-2-7b-hf/", "mistralai/Mistral-7B-v0.1/"])
+    assert captured_paths == ["meta-llama/Llama-2-7b-hf", "mistralai/Mistral-7B-v0.1"]
