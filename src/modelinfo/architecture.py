@@ -11,6 +11,7 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
 
     metadata = tensors.get("__metadata__", {})
     gen_arch = metadata.get("general.architecture")
+    is_gguf = "general.architecture" in metadata or any(k.startswith("general.") for k in metadata.keys())
 
     # 1. Attempt explicit GGUF metadata
     if gen_arch:
@@ -68,14 +69,14 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
             found_k_proj = True
             shape = meta.get("shape", [])
             if len(shape) >= 2:
-                kv_dim = shape[0]
+                kv_dim = shape[-1] if is_gguf else shape[0]
 
         if "qkv_proj.weight" in name or "c_attn.weight" in name:
             found_fused = True
             if not found_k_proj:
                 shape = meta.get("shape", [])
                 if len(shape) >= 2:
-                    kv_dim = shape[0] // 3
+                    kv_dim = (shape[-1] if is_gguf else shape[0]) // 3
 
     num_layers = len(layers_set)
     if found_fused and not found_k_proj and kv_dim > 0:
