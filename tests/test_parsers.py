@@ -201,6 +201,7 @@ def test_remote_gguf_parsing_not_found(monkeypatch):
         huggingface.fetch_huggingface_repo("org/nonexistent-model")
     assert "Could not find repository on Hugging Face" in str(exc_info.value)
 
+
 def test_remote_shard_download_failure(monkeypatch):
     """Test remote sharded safetensors parsing when one of the shard downloads fails."""
     import json
