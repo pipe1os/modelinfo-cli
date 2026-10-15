@@ -41,7 +41,10 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
             config = config["text_config"]
         num_layers = config.get("num_hidden_layers", config.get("n_layer", 0))
         num_attention_heads = config.get("num_attention_heads", config.get("n_head", 1))
-        num_key_value_heads = config.get("num_key_value_heads", num_attention_heads)
+        num_key_value_heads = config.get("num_key_value_heads", config.get("num_kv_heads"))
+        if num_key_value_heads is None:
+            # Multi-query attention (GPTBigCode, Falcon-7B) shares one KV head.
+            num_key_value_heads = 1 if config.get("multi_query") else num_attention_heads
         hidden_size = config.get("hidden_size", config.get("n_embd", 0))
 
         if num_attention_heads > 0:
@@ -83,7 +86,10 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
             if not found_k_proj:
                 shape = meta.get("shape", [])
                 if len(shape) >= 2:
-                    output_dim = shape[-1] if is_gguf or name.endswith("c_attn.weight") else shape[0]
+                    # Fused QKV outputs are never narrower than the input, so the
+                    # larger axis covers both Linear (out, in) and GPT-2 Conv1D
+                    # (in, out) layouts; c_attn uses both depending on the model.
+                    output_dim = shape[-1] if is_gguf else max(shape[0], shape[-1])
                     kv_dim = output_dim // 3
 
     num_layers = len(layers_set)

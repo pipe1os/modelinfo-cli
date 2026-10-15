@@ -81,10 +81,16 @@ def calculate_footprint(
         base_memory_bytes = tensors.get("__metadata__", {}).get("total_size", 0.0)
         # Lazy mode estimates parameter count from the configured weight dtype.
         # Retain the BF16 fallback when no recognized dtype is available.
-        dtype_config = config or {}
-        if isinstance(dtype_config.get("text_config"), dict):
-            dtype_config = dtype_config["text_config"]
-        configured_dtype = dtype_config.get("dtype") or dtype_config.get("torch_dtype")
+        # Multimodal text_config may omit the dtype declared at the top level.
+        dtype_sources = [config or {}]
+        if isinstance(dtype_sources[0].get("text_config"), dict):
+            dtype_sources.insert(0, dtype_sources[0]["text_config"])
+        configured_dtype = next(
+            (source.get("dtype") or source.get("torch_dtype")
+             for source in dtype_sources
+             if source.get("dtype") or source.get("torch_dtype")),
+            None,
+        )
         primary_dtype = {
             "float64": "F64", "float32": "F32", "float16": "F16",
             "bfloat16": "BF16",
