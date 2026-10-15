@@ -8,6 +8,31 @@ from rich.table import Table
 from modelinfo.calculator import format_bytes, format_params
 
 console = Console()
+error_console = Console(stderr=True)
+
+def fit_status(required_bytes: float, max_vram_gb: float, comfortable_ratio: float) -> str:
+    """Classify a memory requirement against a VRAM budget as "yes", "warning" or "no"."""
+    utilization = required_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
+    if utilization <= comfortable_ratio:
+        return "yes"
+    if utilization <= 0.99:
+        return "warning"
+    return "no"
+
+def gguf_variant_totals(variants: list, footprint: Dict[str, Any], gpu_count: int = 1) -> list:
+    """Estimate total VRAM for each quantization in a GGUF repository, largest file first."""
+    kv_cache_bytes = footprint["kv_cache_bytes"]
+    penalty_percentage = footprint.get("penalty_percentage", 0.0)
+    cuda_overhead = 600 * 1024 * 1024 * gpu_count
+    return [
+        {
+            "filename": var["filename"],
+            "size": var["size"],
+            "total_vram_bytes": var["size"] + kv_cache_bytes
+            + (cuda_overhead + var["size"] * penalty_percentage),
+        }
+        for var in sorted(variants, key=lambda x: x["size"], reverse=True)
+    ]
 
 def get_vram_color(bytes_size: float, max_vram_gb: float = 8.0) -> str:
     gb = bytes_size / (1024**3)
@@ -78,36 +103,25 @@ def print_model_info(
         if show_fits:
             table.add_column("Fits", justify="left")
             
-        kv_cache_bytes = footprint["kv_cache_bytes"]
-        penalty_percentage = footprint.get("penalty_percentage", 0.0)
-        cuda_overhead = 600 * 1024 * 1024 * gpu_count
-        
-        sorted_variants = sorted(variants, key=lambda x: x["size"], reverse=True)
+        kv_cache_str = format_bytes(footprint["kv_cache_bytes"])
+        fit_labels = {
+            "yes": "[green]✓ Yes[/green]",
+            "warning": "[yellow]⚠ Warning[/yellow]",
+            "no": "[red]✗ No[/red]",
+        }
+
+        sorted_variants = gguf_variant_totals(variants, footprint, gpu_count)
         for var in sorted_variants:
-            filename = var["filename"]
-            size_bytes = var["size"]
-            variant_overhead = cuda_overhead + (size_bytes * penalty_percentage)
-            total_vram_bytes = size_bytes + kv_cache_bytes + variant_overhead
-            
-            file_size_str = format_bytes(size_bytes)
-            kv_cache_str = format_bytes(kv_cache_bytes)
-            
+            total_vram_bytes = var["total_vram_bytes"]
             vram_color = get_vram_color(total_vram_bytes, max_vram_gb)
             total_vram_str = f"[{vram_color}]~{format_bytes(total_vram_bytes)}[/{vram_color}]"
-            
-            row_data = [filename, file_size_str, kv_cache_str, total_vram_str]
+
+            row_data = [var["filename"], format_bytes(var["size"]), kv_cache_str, total_vram_str]
             if show_fits:
-                utilization = total_vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
-                if utilization <= gpu_util:
-                    fit_text = "[green]✓ Yes[/green]"
-                elif utilization <= 0.99:
-                    fit_text = "[yellow]⚠ Warning[/yellow]"
-                else:
-                    fit_text = "[red]✗ No[/red]"
-                row_data.append(fit_text)
-                
+                row_data.append(fit_labels[fit_status(total_vram_bytes, max_vram_gb, gpu_util)])
+
             table.add_row(*row_data)
-            
+
         console.print(table)
         console.print()
         console.print(f"[dim]Tip: To view details for a specific quantization, run: modelinfo {repo_id}/{sorted_variants[0]['filename']}[/dim]")
@@ -201,10 +215,10 @@ def print_model_info(
         if gpu_name and (missing_shards > 0 or footprint["total_memory_bytes"] == 0):
             summary.add_row("Hardware Fit:", "[yellow]Unknown (Incomplete Model Metadata)[/yellow]")
         elif gpu_name:
-            utilization = vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
-            if utilization <= gpu_util:
+            status = fit_status(vram_bytes, max_vram_gb, gpu_util)
+            if status == "yes":
                 fit_text = f"[green]✓ Fits comfortably in {gpu_name} ({max_vram_gb:.1f} GB)[/green]"
-            elif utilization <= 0.99:
+            elif status == "warning":
                 fit_text = f"[yellow]⚠ Warning: Extreme hardware limit on {gpu_name}. High risk of fragmentation OOM.[/yellow]"
             else:
                 fit_text = f"[red]✗ No (Requires {format_bytes(vram_bytes)}, Hardware has {max_vram_gb:.1f} GB)[/red]"
@@ -286,13 +300,9 @@ def print_compare_info(models: list, max_vram_gb: float = 8.0, gpu_name: str | N
         row = [name, param_text, dtype_text, context_text, vram_text]
         
         if gpu_name:
-            utilization = vram_bytes / (max_vram_gb * 1024**3) if max_vram_gb > 0 else 2.0
-            if utilization <= 0.90:
-                row.append("[green]✓[/green]")
-            elif utilization <= 0.99:
-                row.append("[yellow]⚠[/yellow]")
-            else:
-                row.append("[red]✗[/red]")
+            status = fit_status(vram_bytes, max_vram_gb, 0.90)
+            row.append({"yes": "[green]✓[/green]", "warning": "[yellow]⚠[/yellow]",
+                        "no": "[red]✗[/red]"}[status])
                 
         table.add_row(*row)
         

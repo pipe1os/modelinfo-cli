@@ -9,7 +9,13 @@ from modelinfo.calculator import calculate_footprint
 from modelinfo.parsers.gguf import parse_gguf_header
 from modelinfo.parsers.pytorch import parse_pytorch_header
 from modelinfo.parsers.safetensors import parse_safetensors_header
-from modelinfo.ui import console, print_model_info, print_compare_info
+from modelinfo.ui import (
+    error_console,
+    fit_status,
+    gguf_variant_totals,
+    print_compare_info,
+    print_model_info,
+)
 
 
 class VersionAction(argparse.Action):
@@ -278,6 +284,53 @@ def analyze_model(
     }
 
 
+def _hardware_fit(info: dict, metadata: dict, max_vram_gb: float) -> str:
+    """Return the same fit verdict the terminal report shows for a single model."""
+    footprint = info["footprint"]
+    if info["is_vllm"]:
+        paged_kv_pool = footprint.get("vllm_metrics", {}).get("paged_kv_pool", 0.0)
+        return "yes" if paged_kv_pool > 0 else "no"
+    if metadata.get("missing_shards", 0) > 0 or footprint["total_memory_bytes"] == 0:
+        return "unknown"
+    return fit_status(footprint["total_memory_bytes"], max_vram_gb, info["gpu_util"])
+
+
+def _json_report(
+    info: dict, gpu_name: str | None, max_vram_gb: float, include_tensors: bool
+) -> dict:
+    """Build the --json document from an analysis without the per-tensor table."""
+    tensors = info["tensors"]
+    metadata = tensors.get("__metadata__", {})
+    report = {key: value for key, value in info.items() if key != "tensors"}
+    # GGUF tokenizer arrays (vocabulary, merges, scores) run to many megabytes.
+    report["metadata"] = {
+        key: value
+        for key, value in metadata.items()
+        if not (key.startswith("tokenizer.") and isinstance(value, list))
+    }
+    if include_tensors:
+        report["tensors"] = {
+            name: meta for name, meta in tensors.items() if name != "__metadata__"
+        }
+
+    if info["format_name"] == "GGUF_group":
+        variants = gguf_variant_totals(
+            metadata.get("gguf_variants", []), info["footprint"], info["gpu_count"]
+        )
+        if gpu_name is not None:
+            for variant in variants:
+                variant["fits"] = fit_status(
+                    variant["total_vram_bytes"], max_vram_gb, info["gpu_util"]
+                )
+        report["variants"] = variants
+
+    if gpu_name is not None:
+        report["gpu_name"] = gpu_name
+        if info["format_name"] != "GGUF_group":
+            report["hardware_fit"] = _hardware_fit(info, metadata, max_vram_gb)
+    return report
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     args = parse_args(argv)
 
@@ -296,7 +349,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if len(args.file) > 1:
         if args.vllm:
-            console.print("[red]Error: Side-by-side comparison does not currently support the --vllm capacity simulation. Compare models sequentially or remove --vllm.[/red]")
+            error_console.print("[red]Error: Side-by-side comparison does not currently support the --vllm capacity simulation. Compare models sequentially or remove --vllm.[/red]")
             return 1
             
         models = []
@@ -316,10 +369,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             models.append((model_path.split("/")[-1], info))
             
+        max_vram_gb = gpu_vram_gb if gpu_vram_gb else args.max_vram
         if args.json:
-            print(json.dumps([{"name": name, "info": info} for name, info in models], indent=2))
+            reports = [
+                {
+                    "name": name,
+                    "info": _json_report(info, gpu_name_display, max_vram_gb, args.tensors),
+                }
+                for name, info in models
+            ]
+            print(json.dumps(reports, indent=2))
         else:
-            print_compare_info(models, gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
+            print_compare_info(models, max_vram_gb, gpu_name=gpu_name_display)
         return 0
         
     file_path = args.file[0]
@@ -338,10 +399,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         gpu_util=args.gpu_util
     )
 
+    max_vram_gb = gpu_vram_gb if gpu_vram_gb else args.max_vram
     if args.json:
-        print(json.dumps(info, indent=2))
+        report = _json_report(info, gpu_name_display, max_vram_gb, args.tensors)
+        print(json.dumps(report, indent=2))
     else:
-        print_model_info(**info, max_vram_gb=gpu_vram_gb if gpu_vram_gb else args.max_vram, gpu_name=gpu_name_display)
+        print_model_info(**info, max_vram_gb=max_vram_gb, gpu_name=gpu_name_display)
     return 0
 
 

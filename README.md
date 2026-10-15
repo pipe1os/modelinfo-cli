@@ -147,19 +147,34 @@ Qwen2.5-0.5B       494.0M    BF16     8K         1.6 GB      ✓
 
 ## Machine-readable output
 
-Use `modelinfo model.gguf --json` to write the complete analysis dictionary to
-standard output without terminal tables or ANSI styling. For example:
+Use `modelinfo model.gguf --json` to write the analysis to standard output
+without terminal tables or ANSI styling. For example:
 
 ```bash
 modelinfo model.gguf --json > analysis.json
+modelinfo model.gguf --json --gpu RTX4090 | jq .hardware_fit
 modelinfo first.gguf second.gguf --json > comparison.json
 ```
 
-A single model produces an object containing `footprint`, `tensors`, and the
-other analysis metadata. Multiple models produce an ordered array of objects
-with `name` (the displayed filename) and `info` (the analysis dictionary).
-`--json` also works with single-model `--vllm` analysis. It does not change the
-existing restriction on combining multi-model comparison with `--vllm`.
+A single model produces an object containing:
+
+- `footprint`: the memory calculation (`total_params`, `base_memory_bytes`,
+  `kv_cache_bytes`, `overhead_bytes`, `total_memory_bytes`, `vllm_metrics`, ...).
+- `metadata`: the checkpoint header metadata. GGUF tokenizer arrays
+  (`tokenizer.*` vocabularies, merges and scores) are omitted because they run
+  to several megabytes.
+- The analysis settings and results, such as `format_name`, `arch_name`,
+  `context_length`, `max_context` and `disk_size`.
+- With `--gpu` or `--vllm`: `gpu_name` and `hardware_fit` (`yes`, `warning`,
+  `no` or `unknown`), the same verdict the terminal report shows.
+- For a repository with several GGUF quantizations: `variants`, listing each
+  file's `size` and `total_vram_bytes`, plus `fits` when a GPU is targeted.
+- With `--tensors`: `tensors`, the per-tensor `shape` and `dtype` table.
+
+Multiple models produce an ordered array of objects with `name` (the displayed
+filename) and `info` (the object above). `--json` also works with single-model
+`--vllm` analysis. It does not change the existing restriction on combining
+multi-model comparison with `--vllm`; that error is written to standard error.
 
 ## Command Reference
 
@@ -176,7 +191,7 @@ existing restriction on combining multi-model comparison with `--vllm`.
 | `--topology` | `--topology nvlink` | Set interconnect topology to calculate exact communication overhead penalties (`nvlink`, `pcie4`, `pcie3`). Defaults to `pcie4`. |
 | `--strategy` | `--strategy tp` | Selects the parallelization strategy for multi-GPU setups (`tp` for Tensor Parallelism, `pp` for Pipeline Parallelism). Defaults to `tp`. |
 | `--tensors` | `--tensors` | Bypasses the algorithmic speed estimation and forces the tool to fetch all remote shards, displaying an exact size breakdown of every tensor. |
-| `--json` | `--json` | Emit analysis metadata as JSON instead of terminal tables. |
+| `--json` | `--json` | Emit the analysis as JSON instead of terminal tables. Add `--tensors` to include the per-tensor table. |
 | `--timeout` | `--timeout 30` | Network timeout in seconds for remote Hugging Face fetches. Defaults to `10`. |
 | `-v, --version` | `modelinfo -v` | Show program's version number and exit. |
 
