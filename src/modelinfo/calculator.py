@@ -56,6 +56,18 @@ def _get_bytes_per_param(dtype: str) -> float:
     """Return the size in bytes for a given data type."""
     return DTYPE_BYTES.get(dtype.upper(), 2.0)
 
+def _configured_weight_dtype(config: Dict[str, Any] | None) -> str:
+    """Return the weight dtype declared in config.json, falling back to BF16."""
+    sources = [config or {}]
+    # Multimodal text_config may omit the dtype declared at the top level.
+    if isinstance(sources[0].get("text_config"), dict):
+        sources.insert(0, sources[0]["text_config"])
+    declared = [source.get("dtype") or source.get("torch_dtype") for source in sources]
+    configured = next((dtype for dtype in declared if dtype), None)
+    return {
+        "float64": "F64", "float32": "F32", "float16": "F16", "bfloat16": "BF16",
+    }.get(str(configured).lower(), "BF16")
+
 def calculate_footprint(
     tensors: Dict[str, Any], 
     context_length: int = 0, 
@@ -80,21 +92,7 @@ def calculate_footprint(
     if is_lazy:
         base_memory_bytes = tensors.get("__metadata__", {}).get("total_size", 0.0)
         # Lazy mode estimates parameter count from the configured weight dtype.
-        # Retain the BF16 fallback when no recognized dtype is available.
-        # Multimodal text_config may omit the dtype declared at the top level.
-        dtype_sources = [config or {}]
-        if isinstance(dtype_sources[0].get("text_config"), dict):
-            dtype_sources.insert(0, dtype_sources[0]["text_config"])
-        configured_dtype = next(
-            (source.get("dtype") or source.get("torch_dtype")
-             for source in dtype_sources
-             if source.get("dtype") or source.get("torch_dtype")),
-            None,
-        )
-        primary_dtype = {
-            "float64": "F64", "float32": "F32", "float16": "F16",
-            "bfloat16": "BF16",
-        }.get(str(configured_dtype).lower(), "BF16")
+        primary_dtype = _configured_weight_dtype(config)
         dtype_counts[primary_dtype] = 1
         total_params = int(base_memory_bytes / _get_bytes_per_param(primary_dtype))
     else:

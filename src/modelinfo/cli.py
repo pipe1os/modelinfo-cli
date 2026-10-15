@@ -295,39 +295,46 @@ def _hardware_fit(info: dict, metadata: dict, max_vram_gb: float) -> str:
     return fit_status(footprint["total_memory_bytes"], max_vram_gb, info["gpu_util"])
 
 
-def _json_report(
-    info: dict, gpu_name: str | None, max_vram_gb: float, include_tensors: bool
-) -> dict:
-    """Build the --json document from an analysis without the per-tensor table."""
-    tensors = info["tensors"]
-    metadata = tensors.get("__metadata__", {})
-    report = {key: value for key, value in info.items() if key != "tensors"}
+def _json_metadata(metadata: dict) -> dict:
     # GGUF tokenizer arrays (vocabulary, merges, scores) run to many megabytes.
-    report["metadata"] = {
+    return {
         key: value
         for key, value in metadata.items()
         if not (key.startswith("tokenizer.") and isinstance(value, list))
     }
+
+
+def _json_variants(
+    info: dict, metadata: dict, gpu_name: str | None, max_vram_gb: float
+) -> list:
+    variants = gguf_variant_totals(
+        metadata.get("gguf_variants", []), info["footprint"], info["gpu_count"]
+    )
+    if gpu_name is not None:
+        for variant in variants:
+            variant["fits"] = fit_status(
+                variant["total_vram_bytes"], max_vram_gb, info["gpu_util"]
+            )
+    return variants
+
+
+def _json_report(
+    info: dict, gpu_name: str | None, max_vram_gb: float, include_tensors: bool
+) -> dict:
+    """Build the --json document from an analysis without the per-tensor table."""
+    report = dict(info)
+    tensors = dict(report.pop("tensors"))
+    metadata = tensors.pop("__metadata__", {})
+    report["metadata"] = _json_metadata(metadata)
     if include_tensors:
-        report["tensors"] = {
-            name: meta for name, meta in tensors.items() if name != "__metadata__"
-        }
+        report["tensors"] = tensors
 
     if info["format_name"] == "GGUF_group":
-        variants = gguf_variant_totals(
-            metadata.get("gguf_variants", []), info["footprint"], info["gpu_count"]
-        )
-        if gpu_name is not None:
-            for variant in variants:
-                variant["fits"] = fit_status(
-                    variant["total_vram_bytes"], max_vram_gb, info["gpu_util"]
-                )
-        report["variants"] = variants
-
+        report["variants"] = _json_variants(info, metadata, gpu_name, max_vram_gb)
+    elif gpu_name is not None:
+        report["hardware_fit"] = _hardware_fit(info, metadata, max_vram_gb)
     if gpu_name is not None:
         report["gpu_name"] = gpu_name
-        if info["format_name"] != "GGUF_group":
-            report["hardware_fit"] = _hardware_fit(info, metadata, max_vram_gb)
     return report
 
 
