@@ -374,7 +374,7 @@ def main(argv: Sequence[str] | None = None) -> int:
                 gpu_vram_gb=gpu_vram_gb if gpu_vram_gb else 0.0,
                 gpu_util=args.gpu_util
             )
-            models.append((model_path.split("/")[-1], info))
+            models.append((os.path.basename(model_path), info))
             
         max_vram_gb = gpu_vram_gb if gpu_vram_gb else args.max_vram
         if args.json:

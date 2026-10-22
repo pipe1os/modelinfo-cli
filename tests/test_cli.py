@@ -368,3 +368,13 @@ def test_cli_strips_trailing_slashes_from_model_paths(monkeypatch):
     # Test multiple model paths with trailing slashes (side-by-side comparison)
     cli.main(["meta-llama/Llama-2-7b-hf/", "mistralai/Mistral-7B-v0.1/"])
     assert captured_paths == ["meta-llama/Llama-2-7b-hf", "mistralai/Mistral-7B-v0.1"]
+
+
+def test_cli_comparison_uses_file_name_for_windows_path(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "analyze_model", lambda *args, **kwargs: {})
+    monkeypatch.setattr(cli, "_json_report", lambda *args, **kwargs: {})
+
+    cli.main([r"C:\models\b.pt", "a.gguf", "--json"])
+
+    reports = json.loads(capsys.readouterr().out)
+    assert [report["name"] for report in reports] == ["b.pt", "a.gguf"]
