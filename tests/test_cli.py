@@ -1,3 +1,5 @@
+import sys
+
 import pytest
 
 import modelinfo.cli as cli
@@ -368,6 +370,66 @@ def test_cli_strips_trailing_slashes_from_model_paths(monkeypatch):
     # Test multiple model paths with trailing slashes (side-by-side comparison)
     cli.main(["meta-llama/Llama-2-7b-hf/", "mistralai/Mistral-7B-v0.1/"])
     assert captured_paths == ["meta-llama/Llama-2-7b-hf", "mistralai/Mistral-7B-v0.1"]
+
+
+def _fake_model_info() -> dict:
+    """Minimal analyze_model() payload for CLI-level comparison tests."""
+    return {
+        "format_name": "GGUF",
+        "arch_name": "Llama",
+        "tensor_count": 10,
+        "footprint": {
+            "total_params": 100,
+            "base_memory_bytes": 200,
+            "kv_cache_bytes": 100,
+            "overhead_bytes": 50,
+            "total_memory_bytes": 350,
+            "num_layers": 1,
+        },
+        "disk_size": 200,
+        "context_length": 128,
+        "is_default_context": True,
+        "tensors": {},
+        "max_context": 512,
+        "is_lazy": False,
+        "gpu_count": 1,
+        "topology": "pcie4",
+        "strategy": "tp",
+        "is_vllm": False,
+        "gpu_vram_gb": 0.0,
+        "gpu_util": 0.9,
+    }
+
+
+def _comparison_names(monkeypatch, paths: list[str]) -> list[str]:
+    """Run side-by-side comparison and return the reported model names."""
+    captured_models = []
+
+    def fake_analyze_model(file_path, *args, **kwargs):
+        return _fake_model_info()
+
+    def fake_print_compare_info(models, max_vram, gpu_name):
+        captured_models.extend(models)
+
+    monkeypatch.setattr(cli, "analyze_model", fake_analyze_model)
+    monkeypatch.setattr(cli, "print_compare_info", fake_print_compare_info)
+    monkeypatch.setattr(cli, "print_model_info", lambda *args, **kwargs: None)
+
+    cli.main(paths)
+    return [name for name, _ in captured_models]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="backslash separators only appear in Windows paths")
+def test_comparison_reports_file_name_for_backslash_paths(monkeypatch):
+    names = _comparison_names(monkeypatch, ["a.gguf", "C:\\models\\b.pt"])
+
+    assert names == ["a.gguf", "b.pt"]
+
+
+def test_comparison_keeps_last_segment_for_huggingface_repo_ids(monkeypatch):
+    names = _comparison_names(monkeypatch, ["a.gguf", "meta-llama/Llama-2-7b-hf"])
+
+    assert names == ["a.gguf", "Llama-2-7b-hf"]
 
 
 def test_main_reports_errors_without_traceback(capsys):
