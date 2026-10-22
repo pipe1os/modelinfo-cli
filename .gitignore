@@ -232,3 +232,6 @@ CLAUDE.md
 
 # Serena AI agent memories and configuration
 .serena/
+
+# Node (Changesets release tooling)
+node_modules/

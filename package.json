@@ -1,0 +1,13 @@
+{
+  "name": "modelinfo-cli",
+  "version": "1.4.4",
+  "private": true,
+  "description": "Release tooling only. The Python package is defined in pyproject.toml.",
+  "scripts": {
+    "changeset": "changeset",
+    "version": "changeset version && node scripts/sync-version.mjs"
+  },
+  "devDependencies": {
+    "@changesets/cli": "^3.0.3"
+  }
+}

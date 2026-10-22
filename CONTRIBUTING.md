@@ -107,6 +107,8 @@ Enhancement suggestions are tracked as [GitHub issues](/issues).
 
 Unsure where to begin contributing? You can start by looking through `good first issue` and `help wanted` issues.
 
+If your change affects users, add a changeset with `npx changeset` (requires Node.js and `npm install`). See [.changeset/README.md](.changeset/README.md).
+
 ### Improving The Documentation
 
 Documentation improvements are always welcome. Whether it's fixing a typo, expanding an explanation, or writing a new guide, your help is appreciated.

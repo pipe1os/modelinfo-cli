@@ -1,32 +1,4 @@
-# Change Log
-All notable changes to this project will be documented in this file.
- 
-The format is based on [Keep a Changelog](http://keepachangelog.com/)
-and this project adheres to [Semantic Versioning](http://semver.org/).
- 
-## [Unreleased]
-
-### Added
-- Added the `--json` flag for machine-readable single-model and comparison output, including the hardware fit verdict and per-quantization totals for GGUF repositories (#48).
-- Added recognition of TQ1_0, TQ2_0, MXFP4, U16, U8 and BOOL tensor storage (#52).
-- Added offline test coverage for the Hugging Face request layer, the local SafeTensors/PyTorch parsers and the UI renderer (#45, #46, #47).
-
-### Changed
-- Remote `owner/repo/file.gguf` paths that do not exist locally are now fetched from the Hugging Face Hub, as documented in the README (#50).
-- The cached Hugging Face token is read from `HF_TOKEN_PATH`, `HF_HOME` or `XDG_CACHE_HOME` when set (#46).
-- GGUF headers parse about twice as fast: numeric metadata arrays such as tokenizer scores and token types are unpacked in one call.
-
-### Fixed
-- Missing files, gated repositories, network failures and corrupt headers now print a one-line `Error:` message and exit with status 1 instead of a Python traceback.
-- Fixed a `MemoryError` on GGUF files with a corrupt string or array length; they now fail with "Unexpected end of GGUF header".
-- Fixed PyTorch `.pt`/`.bin` parsing failing on every real `torch.save` checkpoint, and added support for double, short, char, byte and bool storage and wrapped `state_dict` checkpoints (#45).
-- Fixed AMD auto-detection never matching real `rocm-smi` output, Intel Macs being reported as Apple Silicon, and lenient Intel `xpu-smi` memory parsing (#51).
-- Fixed GGUF quantized memory estimates to match the GGML block sizes (e.g. Q4_K was overestimated by ~5.6%) and counted scalar tensors (#52).
-- Fixed KV cache estimates for explicit `head_dim`, GGUF files without `head_count_kv`, GPT-2 style configs, multimodal `text_config`, multi-query attention (GPTBigCode, Falcon) and `num_kv_heads` (#52).
-- Fixed an `UnboundLocalError` when `--gpu` was combined with missing shards or missing tensor shapes (#47).
-- Rejected invalid `--context`, `--max-vram`, `--gpu-util` and `--gpu` values (zero GPUs, nonpositive or non-finite VRAM) instead of producing negative or NaN estimates (#49, #51).
-- Hardened remote reads: bounded and validated SafeTensors headers, rejected ignored or mismatched byte ranges, percent-encoded file paths and stopped retaining bearer tokens in reused headers (#46).
-- Rejected truncated GGUF headers, and respected shard index assignments for local and remote sharded SafeTensors (#45, #46).
+# Changelog
 
 ## [1.4.4] - 2026-06-27
 
