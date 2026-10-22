@@ -11,7 +11,7 @@ from rich.markup import escape
 from modelinfo.architecture import identify_architecture_name
 from modelinfo.calculator import calculate_footprint
 from modelinfo.parsers.gguf import parse_gguf_header
-from modelinfo.parsers.pytorch import parse_pytorch_header
+from modelinfo.parsers.pytorch import parse_pytorch_header, parse_pytorch_index
 from modelinfo.parsers.safetensors import parse_safetensors_header
 from modelinfo.ui import (
     error_console,
@@ -166,6 +166,31 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _is_pytorch_index(file_path: str) -> bool:
+    """Return True when an ``*.index.json`` file describes PyTorch shards.
+
+    The canonical ``pytorch_model.bin.index.json`` name (and any
+    ``*.pt.index.json``) is PyTorch by name; any other index is PyTorch
+    only when every shard its ``weight_map`` points to is a ``.bin``/``.pt``
+    file, so SafeTensors indexes keep their existing routing.
+    """
+    file_path_lower = file_path.lower()
+    if file_path_lower.endswith((".bin.index.json", ".pt.index.json")):
+        return True
+    try:
+        with open(file_path, "r", encoding="utf-8") as f:
+            index_data = json.load(f)
+    except (OSError, ValueError):
+        return False
+    if not isinstance(index_data, dict):
+        return False
+    weight_map = index_data.get("weight_map", {})
+    if not isinstance(weight_map, dict) or not weight_map:
+        return False
+    shard_names = [str(name).lower() for name in weight_map.values()]
+    return all(name.endswith((".bin", ".pt")) for name in shard_names)
+
+
 def analyze_model(
     file_path: str, 
     context_override: int | None, 
@@ -207,9 +232,13 @@ def analyze_model(
             file_path, fetch_tensors=fetch_tensors, timeout=timeout
         )
     elif file_path_lower.endswith(".safetensors") or file_path_lower.endswith(".index.json"):
-        tensors = parse_safetensors_header(file_path)
-        format_name = "SafeTensors"
-        
+        if file_path_lower.endswith(".index.json") and _is_pytorch_index(file_path):
+            tensors = parse_pytorch_index(file_path)
+            format_name = "PyTorch"
+        else:
+            tensors = parse_safetensors_header(file_path)
+            format_name = "SafeTensors"
+
         config_path = os.path.join(os.path.dirname(file_path), "config.json")
         if os.path.exists(config_path):
             try:

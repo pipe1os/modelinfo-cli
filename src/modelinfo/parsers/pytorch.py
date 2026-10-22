@@ -1,4 +1,7 @@
+import json
+import os
 import pickle
+import re
 import zipfile
 from typing import Any, Dict
 
@@ -96,9 +99,9 @@ class RestrictedUnpickler(pickle.Unpickler):
         raise pickle.UnpicklingError(f"Global '{module}.{name}' is forbidden for security reasons.")
 
 
-def parse_pytorch_header(path: str) -> Dict[str, Any]:
+def _read_single_pytorch_header(path: str) -> Dict[str, Any]:
     tensors = {}
-    
+
     if not zipfile.is_zipfile(path):
         raise ValueError("PyTorch file is not a valid zip archive (legacy format not supported).")
         
@@ -122,5 +125,70 @@ def parse_pytorch_header(path: str) -> Dict[str, Any]:
                 tensors[k] = v
             else:
                 tensors[k] = {"shape": [], "dtype": "F32"}
-                
+
     return tensors
+
+
+def parse_pytorch_index(index_path: str) -> Dict[str, Any]:
+    """Merge the shards listed in a ``*.bin.index.json`` / ``*.pt.index.json``.
+
+    Mirrors the SafeTensors index path in ``parse_safetensors_header``: only
+    tensors the ``weight_map`` assigns to a shard are taken from it, shards
+    absent on disk are counted instead of failing, and the result carries
+    the same ``__metadata__`` keys that path sets.
+    """
+    dir_path = os.path.dirname(index_path)
+
+    with open(index_path, "r", encoding="utf-8") as f:
+        index_data = json.load(f)
+
+    weight_map = index_data.get("weight_map", {})
+    unique_shards = set(weight_map.values())
+
+    tensors: Dict[str, Any] = {}
+    missing_shards = 0
+    total_shards = len(unique_shards)
+    total_size = 0
+
+    for shard in unique_shards:
+        shard_path = os.path.join(dir_path, shard)
+        if not os.path.exists(shard_path):
+            missing_shards += 1
+            continue
+        total_size += os.path.getsize(shard_path)
+        shard_header = _read_single_pytorch_header(shard_path)
+        for name, assigned_shard in weight_map.items():
+            if assigned_shard != shard:
+                continue
+            if name not in shard_header:
+                raise ValueError(
+                    f"Indexed tensor {name!r} is missing from shard {shard!r}"
+                )
+            tensors[name] = shard_header[name]
+
+    tensors["__metadata__"] = {
+        "missing_shards": missing_shards,
+        "total_shards": total_shards,
+        "is_sharded": True,
+        "disk_size": total_size,
+    }
+
+    return tensors
+
+
+def parse_pytorch_header(path: str) -> Dict[str, Any]:
+    if path.endswith(".index.json"):
+        return parse_pytorch_index(path)
+
+    base_name = os.path.basename(path)
+    if "-of-" in base_name and path.lower().endswith((".bin", ".pt")):
+        match = re.match(r"^(.*?)-\d+-of-\d+(\.bin|\.pt)$", base_name, re.IGNORECASE)
+        if match:
+            prefix, extension = match.group(1), match.group(2)
+            potential_index = os.path.join(
+                os.path.dirname(path), f"{prefix}{extension}.index.json"
+            )
+            if os.path.exists(potential_index):
+                return parse_pytorch_index(potential_index)
+
+    return _read_single_pytorch_header(path)
