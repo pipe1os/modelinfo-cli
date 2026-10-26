@@ -1,6 +1,6 @@
 import pickle
 import zipfile
-from typing import Any, Dict
+from typing import Any, ClassVar
 
 
 class DummyStorage:
@@ -17,7 +17,7 @@ def dummy_rebuild_tensor_v2(
     requires_grad: Any,
     backward_hooks: Any,
     metadata: Any = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     dtype = "F32"
     if isinstance(storage, DummyStorage):
         if storage.name == "HalfStorage":
@@ -47,7 +47,7 @@ class RestrictedUnpickler(pickle.Unpickler):
     dummy PyTorch primitives to be instantiated.
     Blocks arbitrary code execution.
     """
-    ALLOWED_MODULES = {
+    ALLOWED_MODULES: ClassVar[dict[str, set[str]]] = {
         "collections": {"OrderedDict"},
         "torch._utils": {"_rebuild_tensor_v2"},
         "torch": {
@@ -96,7 +96,7 @@ class RestrictedUnpickler(pickle.Unpickler):
         raise pickle.UnpicklingError(f"Global '{module}.{name}' is forbidden for security reasons.")
 
 
-def parse_pytorch_header(path: str) -> Dict[str, Any]:
+def parse_pytorch_header(path: str) -> dict[str, Any]:
     tensors = {}
     
     if not zipfile.is_zipfile(path):

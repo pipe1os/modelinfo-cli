@@ -1,5 +1,7 @@
 import math
-from modelinfo.calculator import calculate_footprint, _get_bytes_per_param
+
+from modelinfo.calculator import _get_bytes_per_param, calculate_footprint
+
 
 def test_quantization_byte_multipliers():
     """Verify block quantization ratios are correct per modern GGUF statistics."""

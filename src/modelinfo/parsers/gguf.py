@@ -1,5 +1,5 @@
 import struct
-from typing import Any, Dict
+from typing import Any
 
 GGML_TYPE_MAP = {
     0: "F32", 1: "F16", 2: "Q4_0", 3: "Q4_1", 4: "Q4_1_O", 5: "Q4_0_O", 
@@ -53,7 +53,7 @@ def _read_gguf_value(f: Any, val_type: int) -> Any:
     raise ValueError(f"Unknown GGUF value type: {val_type}")
 
 
-def parse_gguf_header(path_or_file: str | Any) -> Dict[str, Any]:
+def parse_gguf_header(path_or_file: str | Any) -> dict[str, Any]:
     """Parses a GGUF file header and extracts tensor information."""
     if isinstance(path_or_file, str):
         with open(path_or_file, "rb") as f:
@@ -62,8 +62,8 @@ def parse_gguf_header(path_or_file: str | Any) -> Dict[str, Any]:
         return _parse_gguf_header_from_stream(path_or_file)
 
 
-def _parse_gguf_header_from_stream(f: Any) -> Dict[str, Any]:
-    tensors: Dict[str, Any] = {}
+def _parse_gguf_header_from_stream(f: Any) -> dict[str, Any]:
+    tensors: dict[str, Any] = {}
     magic = _read_exact(f, 4)
     if magic != b"GGUF":
         raise ValueError("Invalid GGUF file: Magic bytes missing.")

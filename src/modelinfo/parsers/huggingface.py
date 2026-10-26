@@ -6,7 +6,8 @@ import struct
 import urllib.error
 import urllib.parse
 import urllib.request
-from typing import Any, Dict, List, Tuple
+from typing import Any
+
 
 def _get_hf_endpoint() -> str:
     endpoint = os.environ.get("HF_ENDPOINT", "https://huggingface.co").strip()
@@ -58,7 +59,7 @@ def _get_hf_token() -> str | None:
 
 def _make_request(
     url: str,
-    headers: Dict[str, str] = None,
+    headers: dict[str, str] | None = None,
     limit: int | None = None,
     timeout: float = 10.0,
 ) -> bytes:
@@ -93,7 +94,7 @@ def _make_request(
            raise FileNotFoundError(f"Could not find repository or file on Hugging Face (404 Not Found): {url}")
         raise
 
-def _fetch_safetensors_header(repo_id: str, filename: str, timeout: float = 10.0) -> Dict[str, Any]:
+def _fetch_safetensors_header(repo_id: str, filename: str, timeout: float = 10.0) -> dict[str, Any]:
     url = _hub_file_url(repo_id, filename)
     
     # 1. Fetch the first 500KB in a single roundtrip
@@ -126,7 +127,7 @@ def _fetch_safetensors_header(repo_id: str, filename: str, timeout: float = 10.0
 
     header = json.loads(json_bytes)
     if not isinstance(header, dict):
-        raise ValueError(f"SafeTensors header in {filename} must be a JSON object.")
+        raise ValueError(f"SafeTensors header in {filename} must be a JSON object.")  # noqa: TRY004 - ValueError is the documented error for bad headers
     return header
 
 def _get_remote_file_size_fallback(repo_id: str, filename: str, timeout: float = 10.0) -> float:
@@ -137,7 +138,7 @@ def _get_remote_file_size_fallback(repo_id: str, filename: str, timeout: float =
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             return float(response.headers.get("Content-Length", 0))
-    except Exception:
+    except Exception:  # noqa: BLE001 - size is optional, 0.0 means unknown
         return 0.0
 
 
@@ -208,7 +209,7 @@ class RemoteFileStream:
         pass
 
 
-def _fetch_remote_gguf_single(real_repo_id: str, filename: str, fallback_size: float | None, timeout: float) -> Tuple[Dict[str, Any], float]:
+def _fetch_remote_gguf_single(real_repo_id: str, filename: str, fallback_size: float | None, timeout: float) -> tuple[dict[str, Any], float]:
     url = _hub_file_url(real_repo_id, filename)
     stream = RemoteFileStream(url, timeout=timeout)
     from modelinfo.parsers.gguf import parse_gguf_header
@@ -220,7 +221,7 @@ def _fetch_remote_gguf_single(real_repo_id: str, filename: str, fallback_size: f
     return tensors, size
 
 
-def _fetch_remote_gguf_group(real_repo_id: str, gguf_files: List[Dict[str, Any]], timeout: float) -> Dict[str, Any]:
+def _fetch_remote_gguf_group(real_repo_id: str, gguf_files: list[dict[str, Any]], timeout: float) -> dict[str, Any]:
     valid_sizes = [g for g in gguf_files if g["size"] is not None and g["size"] > 0]
     if valid_sizes:
         header_target = min(valid_sizes, key=lambda x: x["size"])
@@ -249,7 +250,7 @@ def _fetch_remote_gguf_group(real_repo_id: str, gguf_files: List[Dict[str, Any]]
     return tensors
 
 
-def _fetch_shards_concurrently(real_repo_id: str, unique_shards: List[str], timeout: float, weight_map: Dict[str, str] | None = None) -> Tuple[Dict[str, Any], int]:
+def _fetch_shards_concurrently(real_repo_id: str, unique_shards: list[str], timeout: float, weight_map: dict[str, str] | None = None) -> tuple[dict[str, Any], int]:
     def fetch_shard(shard: str):
         try:
             header = _fetch_safetensors_header(real_repo_id, shard, timeout=timeout)
@@ -259,7 +260,7 @@ def _fetch_shards_concurrently(real_repo_id: str, unique_shards: List[str], time
                     raise ValueError(f"Indexed tensor missing from shard {shard!r}")
                 header = {name: header[name] for name in assigned}
             return shard, header, None
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - any shard failure is reported to the caller
             return shard, {}, e
         
     tensors = {}
@@ -267,7 +268,7 @@ def _fetch_shards_concurrently(real_repo_id: str, unique_shards: List[str], time
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, min(8, len(unique_shards)))) as executor:
         future_to_shard = {executor.submit(fetch_shard, shard): shard for shard in unique_shards}
         for future in concurrent.futures.as_completed(future_to_shard):
-            shard, shard_header, error = future.result()
+            _shard, shard_header, error = future.result()
             if error is not None:
                 missing_shards += 1
             else:
@@ -279,10 +280,10 @@ def _fetch_shards_concurrently(real_repo_id: str, unique_shards: List[str], time
 
 def _fetch_remote_safetensors_sharded(
     real_repo_id: str,
-    config: Dict[str, Any] | None,
+    config: dict[str, Any] | None,
     fetch_tensors: bool,
     timeout: float
-) -> Tuple[Dict[str, Any], float]:
+) -> tuple[dict[str, Any], float]:
     index_url = _hub_file_url(real_repo_id, "model.safetensors.index.json")
     index_data = json.loads(_make_request(index_url, timeout=timeout).decode("utf-8"))
     
@@ -292,7 +293,7 @@ def _fetch_remote_safetensors_sharded(
     
     tensors = {}
     if config and not fetch_tensors and total_size > 0:
-        for tensor_name in weight_map.keys():
+        for tensor_name in weight_map:
             tensors[tensor_name] = {"shape": [], "dtype": "BF16"}
             
         tensors["__metadata__"] = {
@@ -313,7 +314,7 @@ def _fetch_remote_safetensors_sharded(
 
 
 
-def _fetch_remote_safetensors_single(real_repo_id: str, timeout: float) -> Tuple[Dict[str, Any], float]:
+def _fetch_remote_safetensors_single(real_repo_id: str, timeout: float) -> tuple[dict[str, Any], float]:
     total_size = 0.0
     req = urllib.request.Request(_hub_file_url(real_repo_id, "model.safetensors"), method="HEAD")
     token = _get_hf_token()
@@ -322,14 +323,14 @@ def _fetch_remote_safetensors_single(real_repo_id: str, timeout: float) -> Tuple
     try:
         with urllib.request.urlopen(req, timeout=timeout) as response:
             total_size = int(response.headers.get("Content-Length", 0))
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - size is optional, keep default
         pass
 
     header = _fetch_safetensors_header(real_repo_id, "model.safetensors", timeout=timeout)
     return header, float(total_size)
 
 
-def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: float = 10.0) -> Tuple[Dict[str, Any], Dict[str, Any] | None, str, float]:
+def fetch_huggingface_repo(repo_id: str, fetch_tensors: bool = False, timeout: float = 10.0) -> tuple[dict[str, Any], dict[str, Any] | None, str, float]:
     """
     Fetches the metadata directly from the Hugging Face Hub over the network.
     Returns: (tensors, config, format_name, disk_size)

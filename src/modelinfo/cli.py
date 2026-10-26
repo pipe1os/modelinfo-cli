@@ -6,8 +6,10 @@ import os
 import pickle  # nosec B403 - only used to catch UnpicklingError, nothing is unpickled here
 import struct
 import sys
-from typing import Callable, Sequence
+from collections.abc import Callable, Sequence
+
 from rich.markup import escape
+
 from modelinfo.architecture import identify_architecture_name
 from modelinfo.calculator import calculate_footprint
 from modelinfo.parsers.gguf import parse_gguf_header
@@ -34,6 +36,7 @@ class VersionAction(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         from importlib.metadata import PackageNotFoundError, version
+
         from modelinfo import __version__
 
         try:
@@ -311,7 +314,7 @@ def analyze_model(
                 gpu_vram_gb=gpu_vram_gb,
                 gpu_util=gpu_util,
             )
-    elif file_path_lower.endswith(".safetensors") or file_path_lower.endswith(".index.json"):
+    elif file_path_lower.endswith((".safetensors", ".index.json")):
         tensors = parse_safetensors_header(file_path)
         format_name = "SafeTensors"
         
@@ -326,7 +329,7 @@ def analyze_model(
     elif file_path_lower.endswith(".gguf"):
         tensors = parse_gguf_header(file_path)
         format_name = "GGUF"
-    elif file_path_lower.endswith(".pt") or file_path_lower.endswith(".bin"):
+    elif file_path_lower.endswith((".pt", ".bin")):
         tensors = parse_pytorch_header(file_path)
         format_name = "PyTorch"
     else:
@@ -369,7 +372,7 @@ def analyze_model(
         elif os.path.exists(file_path):
             disk_size = os.path.getsize(file_path)
         
-    tensor_count = len([k for k in tensors.keys() if k != "__metadata__"])
+    tensor_count = len([k for k in tensors if k != "__metadata__"])
     
     return {
         "format_name": format_name,

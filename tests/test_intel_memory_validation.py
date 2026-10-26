@@ -1,4 +1,5 @@
 import pytest
+
 from modelinfo.hardware import _parse_intel_vram
 
 

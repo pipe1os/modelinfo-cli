@@ -1,5 +1,5 @@
 import math
-from typing import Any, Dict
+from typing import Any
 
 from modelinfo.architecture import extract_architecture
 
@@ -56,7 +56,7 @@ def _get_bytes_per_param(dtype: str) -> float:
     """Return the size in bytes for a given data type."""
     return DTYPE_BYTES.get(dtype.upper(), 2.0)
 
-def _configured_weight_dtype(config: Dict[str, Any] | None) -> str:
+def _configured_weight_dtype(config: dict[str, Any] | None) -> str:
     """Return the weight dtype declared in config.json, falling back to BF16."""
     sources = [config or {}]
     # Multimodal text_config may omit the dtype declared at the top level.
@@ -69,23 +69,23 @@ def _configured_weight_dtype(config: Dict[str, Any] | None) -> str:
     }.get(str(configured).lower(), "BF16")
 
 def calculate_footprint(
-    tensors: Dict[str, Any], 
+    tensors: dict[str, Any], 
     context_length: int = 0, 
     batch_size: int = 1, 
-    config: Dict[str, Any] = None, 
+    config: dict[str, Any] | None = None, 
     gpu_count: int = 1,
     topology: str = "pcie4",
     strategy: str = "tp",
     is_vllm: bool = False,
     gpu_vram_bytes: float = 0.0,
     gpu_util: float = 0.9
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Calculate the memory footprint of a model based on its tensors and context length.
     """
     total_params = 0
     base_memory_bytes = 0.0
-    dtype_counts: Dict[str, int] = {}
+    dtype_counts: dict[str, int] = {}
     
     is_lazy = tensors.get("__metadata__", {}).get("lazy_fetch", False)
     

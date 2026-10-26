@@ -1,7 +1,6 @@
 import math
 import re
 import subprocess
-from typing import Optional, Tuple
 
 KNOWN_GPUS = {
     # --- NVIDIA Consumer (RTX 50/40/30/20/10 Series & Titans) ---
@@ -158,7 +157,7 @@ def normalize_gpu_string(name: str) -> str:
     return re.sub(r"[\s\-]", "", name)
 
 
-def _detect_nvidia_gpu() -> Optional[Tuple[str, float, int]]:
+def _detect_nvidia_gpu() -> tuple[str, float, int] | None:
     try:
         result = subprocess.run(
             [
@@ -187,12 +186,12 @@ def _detect_nvidia_gpu() -> Optional[Tuple[str, float, int]]:
                 f"Multi-GPU: {gpu_count}x {first_name}" if gpu_count > 1 else first_name
             )
             return display_name, total_mb / 1024.0, gpu_count
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - best-effort probe; any failure means no GPU found
         pass
     return None
 
 
-def _detect_amd_gpu() -> Optional[Tuple[str, float, int]]:
+def _detect_amd_gpu() -> tuple[str, float, int] | None:
     try:
         result = subprocess.run(
             ["rocm-smi", "--showmeminfo", "vram"],
@@ -216,12 +215,12 @@ def _detect_amd_gpu() -> Optional[Tuple[str, float, int]]:
                 f"AMD Multi-GPU ({gpu_count}x)" if gpu_count > 1 else "AMD GPU"
             )
             return display_name, total_bytes / (1024.0**3), gpu_count
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - best-effort probe; any failure means no GPU found
         pass
     return None
 
 
-def _parse_intel_vram(size_str: str) -> Optional[float]:
+def _parse_intel_vram(size_str: str) -> float | None:
     match = re.fullmatch(r"\s*(\d+(?:\.\d*)?|\.\d+)\s*([a-zA-Z]*)\s*", size_str)
     if not match:
         return None
@@ -238,7 +237,7 @@ def _parse_intel_vram(size_str: str) -> Optional[float]:
     return result if math.isfinite(result) else None
 
 
-def _parse_xpu_smi_output(stdout: str) -> Tuple[list[str], float, int]:
+def _parse_xpu_smi_output(stdout: str) -> tuple[list[str], float, int]:
     gpu_names: list[str] = []
     total_mib: float = 0.0
     parsed_memory_entries: int = 0
@@ -260,7 +259,7 @@ def _parse_xpu_smi_output(stdout: str) -> Tuple[list[str], float, int]:
     return gpu_names, total_mib, parsed_memory_entries
 
 
-def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
+def _detect_intel_gpu() -> tuple[str, float, int] | None:
     try:
         result = subprocess.run(
             ["xpu-smi", "discovery"],
@@ -278,12 +277,12 @@ def _detect_intel_gpu() -> Optional[Tuple[str, float, int]]:
                 f"Intel Multi-GPU ({gpu_count}x {first_name})" if gpu_count > 1 else first_name
             )
             return display_name, total_mib / 1024.0, gpu_count
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - best-effort probe; any failure means no GPU found
         pass
     return None
 
 
-def _detect_apple_gpu() -> Optional[Tuple[str, float, int]]:
+def _detect_apple_gpu() -> tuple[str, float, int] | None:
     try:
         architecture = subprocess.run(
             ["sysctl", "-n", "hw.optional.arm64"],
@@ -302,12 +301,12 @@ def _detect_apple_gpu() -> Optional[Tuple[str, float, int]]:
         # Apply 75% operational heuristic for Apple Silicon wire limits
         vram_gb = (total_bytes / (1024.0**3)) * 0.75
         return "Apple Silicon (Unified Memory)", vram_gb, 1
-    except Exception:
+    except Exception:  # noqa: BLE001, S110 - best-effort probe; any failure means no GPU found
         pass
     return None
 
 
-def detect_local_gpu() -> Tuple[str, float, int]:
+def detect_local_gpu() -> tuple[str, float, int]:
     # 1. NVIDIA
     nvidia_res = _detect_nvidia_gpu()
     if nvidia_res is not None:
@@ -331,7 +330,7 @@ def detect_local_gpu() -> Tuple[str, float, int]:
     return "Unknown", 8.0, 1
 
 
-def resolve_gpu(target: str) -> Tuple[str, float, int]:
+def resolve_gpu(target: str) -> tuple[str, float, int]:
     if target.lower() == "auto":
         return detect_local_gpu()
 

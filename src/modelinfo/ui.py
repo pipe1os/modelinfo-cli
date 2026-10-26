@@ -1,6 +1,6 @@
 import math
 import re
-from typing import Any, Dict
+from typing import Any
 
 from rich.console import Console
 from rich.table import Table
@@ -19,7 +19,7 @@ def fit_status(required_bytes: float, max_vram_gb: float, comfortable_ratio: flo
         return "warning"
     return "no"
 
-def gguf_variant_totals(variants: list, footprint: Dict[str, Any], gpu_count: int = 1) -> list:
+def gguf_variant_totals(variants: list, footprint: dict[str, Any], gpu_count: int = 1) -> list:
     """Estimate total VRAM for each quantization in a GGUF repository, largest file first."""
     kv_cache_bytes = footprint["kv_cache_bytes"]
     penalty_percentage = footprint.get("penalty_percentage", 0.0)
@@ -43,7 +43,7 @@ def get_vram_color(bytes_size: float, max_vram_gb: float = 8.0) -> str:
     else:
         return "red"
 
-def group_tensors_by_size(tensors: Dict[str, Any]):
+def group_tensors_by_size(tensors: dict[str, Any]):
     groups = {}
     for name, metadata in tensors.items():
         if name == "__metadata__":
@@ -65,11 +65,11 @@ def print_model_info(
     format_name: str,
     arch_name: str,
     tensor_count: int,
-    footprint: Dict[str, Any],
+    footprint: dict[str, Any],
     disk_size: float,
     context_length: int,
     is_default_context: bool,
-    tensors: Dict[str, Any],
+    tensors: dict[str, Any],
     max_context: int | None = None,
     max_vram_gb: float = 8.0,
     gpu_name: str | None = None,
