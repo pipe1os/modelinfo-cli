@@ -1,5 +1,7 @@
 import os
+
 import pytest
+
 from modelinfo.parsers.huggingface import _get_hf_endpoint
 from modelinfo.parsers.safetensors import parse_safetensors_header
 
@@ -34,8 +36,8 @@ def test_missing_shard_handling():
 
 def test_gguf_parser_metadata():
     """Verify that the GGUF parser extracts the global metadata bypass."""
-    from modelinfo.parsers.gguf import parse_gguf_header
     from modelinfo.architecture import identify_architecture_name
+    from modelinfo.parsers.gguf import parse_gguf_header
     
     mock_path = os.path.join(FIXTURES_DIR, "mock_model.gguf")
     tensors = parse_gguf_header(mock_path)
@@ -87,6 +89,7 @@ def test_hf_endpoint_rejects_no_hostname(monkeypatch):
 def test_remote_gguf_parsing_single(monkeypatch):
     """Test remote GGUF parsing when a single GGUF is found in the repository."""
     import json
+
     from modelinfo.parsers import huggingface
     
     def fake_make_request(url, headers=None, limit=None, timeout=10.0):
@@ -104,7 +107,7 @@ def test_remote_gguf_parsing_single(monkeypatch):
         
     monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
     
-    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf")
+    tensors, _config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf")
     
     assert format_name == "GGUF"
     assert disk_size == 1000000000.0
@@ -114,6 +117,7 @@ def test_remote_gguf_parsing_single(monkeypatch):
 def test_remote_gguf_parsing_group(monkeypatch):
     """Test remote GGUF parsing when multiple GGUF files are present in the repository."""
     import json
+
     from modelinfo.parsers import huggingface
     
     def fake_make_request(url, headers=None, limit=None, timeout=10.0):
@@ -132,7 +136,7 @@ def test_remote_gguf_parsing_group(monkeypatch):
         
     monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
     
-    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf")
+    tensors, _config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf")
     
     assert format_name == "GGUF_group"
     assert disk_size == 0.0
@@ -143,6 +147,7 @@ def test_remote_gguf_parsing_group(monkeypatch):
 def test_remote_gguf_parsing_explicit(monkeypatch):
     """Test remote GGUF parsing when the user targets a specific GGUF file in the repo id."""
     import json
+
     from modelinfo.parsers import huggingface
     
     called_gguf = []
@@ -163,7 +168,7 @@ def test_remote_gguf_parsing_explicit(monkeypatch):
         
     monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
     
-    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf/model-q8.gguf")
+    _tensors, _config, format_name, disk_size = huggingface.fetch_huggingface_repo("org/model-gguf/model-q8.gguf")
     
     assert format_name == "GGUF"
     assert disk_size == 2000000000.0
@@ -173,6 +178,7 @@ def test_remote_gguf_parsing_explicit(monkeypatch):
 def test_remote_gguf_parsing_unauthorized(monkeypatch):
     """Test remote parsing raises PermissionError for gated/unauthorized (401) model repositories."""
     import urllib.error
+
     from modelinfo.parsers import huggingface
     
     def fake_make_request(url, headers=None, limit=None, timeout=10.0):
@@ -189,6 +195,7 @@ def test_remote_gguf_parsing_unauthorized(monkeypatch):
 def test_remote_gguf_parsing_not_found(monkeypatch):
     """Test remote parsing raises FileNotFoundError for missing (404) model repositories."""
     import urllib.error
+
     from modelinfo.parsers import huggingface
     
     def fake_make_request(url, headers=None, limit=None, timeout=10.0):
@@ -203,8 +210,8 @@ def test_remote_gguf_parsing_not_found(monkeypatch):
 
 def test_safetensors_sharded_with_hyphens(tmp_path):
     """Test safetensors parser sharded index path resolution when filename contains hyphens."""
-    import struct
     import json
+    import struct
     
     index_file = tmp_path / "mock-llama-3-8b.safetensors.index.json"
     shard_file = tmp_path / "mock-llama-3-8b-00001-of-00002.safetensors"
@@ -244,6 +251,7 @@ def test_remote_shard_download_failure(monkeypatch):
     import json
     import struct
     import urllib.error
+
     from modelinfo.parsers import huggingface
 
     def fake_make_request(url, headers=None, limit=None, timeout=10.0):
@@ -272,7 +280,7 @@ def test_remote_shard_download_failure(monkeypatch):
 
     monkeypatch.setattr(huggingface, "_make_request", fake_make_request)
 
-    tensors, config, format_name, disk_size = huggingface.fetch_huggingface_repo(
+    tensors, _config, format_name, disk_size = huggingface.fetch_huggingface_repo(
         "org/sharded-safetensors-model", fetch_tensors=True
     )
 

@@ -1,4 +1,5 @@
 import pytest
+
 from modelinfo.calculator import calculate_footprint
 
 

@@ -2,8 +2,7 @@ import json
 
 import pytest
 
-import modelinfo.cli as cli
-from modelinfo import __version__
+from modelinfo import __version__, cli
 from modelinfo.cli import parse_args
 
 
@@ -318,7 +317,7 @@ def test_analyze_model_local_path_routing(monkeypatch):
     for path in remote_paths:
         try:
             cli.analyze_model(path, context_override=128)
-        except Exception:
+        except Exception:  # noqa: S110, BLE001  # fetch routing is the behavior under test
             # We don't care if calculation fails later because of empty dict from fake_fetch,
             # we just care that it triggers fetch_huggingface_repo.
             pass

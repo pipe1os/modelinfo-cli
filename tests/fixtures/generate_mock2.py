@@ -1,6 +1,7 @@
-import struct
 import pickle
+import struct
 import zipfile
+
 
 class DummyStorage:
     def __init__(self, name):

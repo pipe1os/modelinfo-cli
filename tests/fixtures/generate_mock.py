@@ -1,5 +1,5 @@
-import struct
 import json
+import struct
 
 header = {
     "__metadata__": {

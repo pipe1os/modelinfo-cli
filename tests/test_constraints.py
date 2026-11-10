@@ -1,5 +1,6 @@
 import sys
 
+
 def test_no_heavy_dependencies():
     """
     Ensure the CLI entry point does not accidentally import heavy ML libraries.

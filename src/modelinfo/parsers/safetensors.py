@@ -1,8 +1,8 @@
 import json
+import os
 import struct
 from typing import Any
 
-import os
 
 def _read_single_header(path: str) -> dict[str, Any]:
     with open(path, "rb") as f:
@@ -21,7 +21,7 @@ def _read_single_header(path: str) -> dict[str, Any]:
             
         header = json.loads(json_bytes)
         if not isinstance(header, dict):
-            raise ValueError(f"SafeTensors header in {path} must be a JSON object.")
+            raise ValueError(f"SafeTensors header in {path} must be a JSON object.")  # noqa: TRY004  # preserve invalid-header contract
         return header
 
 def parse_safetensors_header(path: str) -> dict[str, Any]:

@@ -4,6 +4,7 @@ Reference: https://github.com/ggml-org/ggml/blob/master/src/ggml-common.h
 This tests packed tensor storage, excluding GGUF file metadata and alignment.
 """
 import pytest
+
 from modelinfo.calculator import calculate_footprint
 
 

@@ -1,5 +1,6 @@
 import json
 import struct
+
 from modelinfo.parsers.safetensors import parse_safetensors_header
 
 

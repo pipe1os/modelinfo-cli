@@ -1,6 +1,7 @@
-from typing import Any, Dict, Tuple
+from typing import Any
 
-def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None) -> Tuple[int, int, bool]:
+
+def extract_architecture(tensors: dict[str, Any], config: dict[str, Any] | None = None) -> tuple[int, int, bool]:
     """
     Extracts the number of layers and KV cache dimension (kv_heads * head_dim).
     Returns (num_layers, kv_dim, is_estimate).
@@ -11,7 +12,7 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
 
     metadata = tensors.get("__metadata__", {})
     gen_arch = metadata.get("general.architecture")
-    is_gguf = "general.architecture" in metadata or any(k.startswith("general.") for k in metadata.keys())
+    is_gguf = "general.architecture" in metadata or any(k.startswith("general.") for k in metadata)
 
     # 1. Attempt explicit GGUF metadata
     if gen_arch:
@@ -75,7 +76,7 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
         if is_gguf and len(parts) > 1 and parts[0] == "blk" and parts[1].isdigit():
             layers_set.add(int(parts[1]))
 
-        if (is_gguf and name.endswith("attn_k.weight")) or name.endswith("k_proj.weight") or name.endswith("attn.k.weight") or name.endswith("k_proj.w"):
+        if (is_gguf and name.endswith("attn_k.weight")) or name.endswith(("k_proj.weight", "attn.k.weight", "k_proj.w")):
             found_k_proj = True
             shape = meta.get("shape", [])
             if len(shape) >= 2:
@@ -98,7 +99,7 @@ def extract_architecture(tensors: Dict[str, Any], config: Dict[str, Any] = None)
 
     return num_layers, kv_dim, is_estimate
 
-def identify_architecture_name(tensors: Dict[str, Any], num_layers: int, config: Dict[str, Any] = None) -> str:
+def identify_architecture_name(tensors: dict[str, Any], num_layers: int, config: dict[str, Any] | None = None) -> str:
     """Attempt to identify the architecture family based on tensor names, metadata, or config.json."""
     if config and "architectures" in config and config["architectures"]:
         arch_title = config["architectures"][0]
@@ -111,7 +112,7 @@ def identify_architecture_name(tensors: Dict[str, Any], num_layers: int, config:
         arch_title = str(gen_arch).title()
         return f"{arch_title} ({num_layers} transformer layers)" if num_layers else arch_title
 
-    for name in tensors.keys():
+    for name in tensors:
         if name == "__metadata__":
             continue
 

@@ -1,5 +1,6 @@
-import subprocess
 import platform
+import subprocess
+
 from modelinfo import hardware
 
 
